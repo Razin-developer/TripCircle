@@ -28,7 +28,7 @@ const themes: Record<ThemeName, AppTheme> = {
   Cocoa: { name: "Cocoa", background: "#F7F0EC", card: "#FCFAF8", text: "#36241D", subtleText: "#81665B", accent: "#9B6B56", marker: "#8E5B43", border: "#E8D9D0", shadow: "rgba(118,86,71,0.14)" },
   Lime: { name: "Lime", background: "#F6FCEB", card: "#FDFFF8", text: "#243513", subtleText: "#76855F", accent: "#90C43E", marker: "#7BB130", border: "#E2EDCD", shadow: "rgba(102,143,40,0.14)" },
   Violet: { name: "Violet", background: "#F5F1FE", card: "#FCFBFF", text: "#2A2145", subtleText: "#776A9B", accent: "#7865F2", marker: "#6B56E5", border: "#E1D8F9", shadow: "rgba(96,79,188,0.14)" },
-  Peach: { name: "Peach", background: "#FFF4EE", card: "#FFFDFB", text: "#4B2D23", subtleText: "#9A766A", accent: "#F39A77", marker: "#ED875F", border: "#F7DECW", shadow: "rgba(194,120,83,0.14)" },
+  Peach: { name: "Peach", background: "#FFF4EE", card: "#FFFDFB", text: "#4B2D23", subtleText: "#9A766A", accent: "#F39A77", marker: "#ED875F", border: "#F7DECF", shadow: "rgba(194,120,83,0.14)" },
   Slate: { name: "Slate", background: "#F2F5F8", card: "#FDFEFF", text: "#1D2B39", subtleText: "#6A7B8C", accent: "#5B7A99", marker: "#506E8C", border: "#DDE5ED", shadow: "rgba(60,84,109,0.14)" },
   Aurora: { name: "Aurora", background: "#EFFAF9", card: "#FBFEFE", text: "#183238", subtleText: "#66818A", accent: "#38B0A2", marker: "#2A9A8F", border: "#D4EDE9", shadow: "rgba(45,129,119,0.14)" },
   Mono: { name: "Mono", background: "#F2F2F2", card: "#FFFFFF", text: "#161616", subtleText: "#767676", accent: "#2C2C2C", marker: "#1E1E1E", border: "#E6E6E6", shadow: "rgba(28,28,28,0.12)" },

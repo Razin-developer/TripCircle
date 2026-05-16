@@ -1,4 +1,4 @@
-import { Schema, model, type InferSchemaType } from "mongoose";
+import { Schema, model, type HydratedDocument, type InferSchemaType } from "mongoose";
 
 const locationSchema = new Schema(
   {
@@ -69,6 +69,6 @@ locationSchema.index({ updatedAt: -1 });
 
 locationSchema.set("timestamps", { createdAt: false, updatedAt: true });
 
-export type LocationDocument = InferSchemaType<typeof locationSchema> & { _id: string };
+export type LocationDocument = HydratedDocument<InferSchemaType<typeof locationSchema>>;
 
 export const Location = model("Location", locationSchema);

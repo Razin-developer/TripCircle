@@ -2,7 +2,7 @@ import * as Location from "expo-location";
 import * as TaskManager from "expo-task-manager";
 
 import { API_BASE_URL } from "@/config";
-import { LAST_SENT_STORAGE_KEY, LOCATION_GROUPS_STORAGE_KEY, getJsonStorage, setJsonStorage } from "@/services/storage";
+import { AUTH_STORAGE_KEY, LAST_SENT_STORAGE_KEY, LOCATION_GROUPS_STORAGE_KEY, getJsonStorage, setJsonStorage } from "@/services/storage";
 import { useAuthStore } from "@/stores/authStore";
 import type { LocationUpdateMode } from "@/types";
 import { getLocationModeConfig } from "@/utils/locationModes";
@@ -38,7 +38,8 @@ TaskManager.defineTask(BACKGROUND_LOCATION_TASK, async ({ data, error }) => {
     return;
   }
 
-  const token = useAuthStore.getState().token;
+  const authSnapshot = await getJsonStorage<{ state?: { token?: string | null } }>(AUTH_STORAGE_KEY, { state: { token: null } });
+  const token = authSnapshot.state?.token ?? useAuthStore.getState().token;
   if (!token) {
     return;
   }

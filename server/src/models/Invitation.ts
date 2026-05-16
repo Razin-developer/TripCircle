@@ -1,4 +1,4 @@
-import { Schema, model, type InferSchemaType } from "mongoose";
+import { Schema, model, type HydratedDocument, type InferSchemaType } from "mongoose";
 
 const invitationSchema = new Schema(
   {
@@ -51,6 +51,6 @@ const invitationSchema = new Schema(
 invitationSchema.index({ invitedPhoneNumber: 1, status: 1 });
 invitationSchema.index({ invitedUserId: 1, status: 1 });
 
-export type InvitationDocument = InferSchemaType<typeof invitationSchema> & { _id: string };
+export type InvitationDocument = HydratedDocument<InferSchemaType<typeof invitationSchema>>;
 
 export const Invitation = model("Invitation", invitationSchema);

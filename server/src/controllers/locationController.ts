@@ -25,7 +25,8 @@ export const locationSchema = z.object({
 });
 
 export const postLocation = asyncHandler(async (request, response) => {
-  const { group, member } = await getGroupForAcceptedMember(request.params.groupId, request.user._id.toString());
+  const groupId = request.params.groupId as string;
+  const { group, member } = await getGroupForAcceptedMember(groupId, request.user._id.toString());
 
   if (!member.isSharingLocation) {
     throw new HttpError(403, "Location sharing is disabled for this group");
@@ -55,13 +56,14 @@ export const postLocation = asyncHandler(async (request, response) => {
   member.lastSeenAt = new Date();
   await group.save();
 
+  const updatedAt = new Date().toISOString();
   const payload = {
     groupId: group._id.toString(),
     userId: request.user._id.toString(),
     phoneNumber: request.user.phoneNumber,
     deviceName: request.user.deviceName,
     ...request.body,
-    updatedAt: location.updatedAt
+    updatedAt
   };
 
   emitToGroup(group._id.toString(), "location:updated", payload);

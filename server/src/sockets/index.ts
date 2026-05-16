@@ -142,6 +142,8 @@ export function createSocketServer(server: HttpServer) {
       member.lastSeenAt = new Date();
       await group.save();
 
+      const updatedAt = new Date().toISOString();
+
       io.to(`group:${payload.groupId}`).emit("location:updated", {
         groupId: payload.groupId,
         userId,
@@ -156,7 +158,7 @@ export function createSocketServer(server: HttpServer) {
         state: payload.state ?? "",
         country: payload.country ?? "",
         batteryLevel: payload.batteryLevel ?? null,
-        updatedAt: location.updatedAt
+        updatedAt
       });
     });
 

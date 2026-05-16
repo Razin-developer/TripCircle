@@ -1,4 +1,4 @@
-import { Schema, model, type InferSchemaType, Types } from "mongoose";
+import { Schema, model, type HydratedDocument, type InferSchemaType, Types } from "mongoose";
 
 const groupMemberSchema = new Schema(
   {
@@ -82,6 +82,6 @@ groupSchema.index({ "members.phoneNumber": 1 });
 export type GroupMemberDocument = InferSchemaType<typeof groupMemberSchema> & {
   userId: Types.ObjectId | null;
 };
-export type GroupDocument = InferSchemaType<typeof groupSchema> & { _id: string };
+export type GroupDocument = HydratedDocument<InferSchemaType<typeof groupSchema>>;
 
 export const Group = model("Group", groupSchema);

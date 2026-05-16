@@ -77,7 +77,8 @@ export const getGroups = asyncHandler(async (request, response) => {
 });
 
 export const getGroup = asyncHandler(async (request, response) => {
-  const { group } = await getGroupForAcceptedMember(request.params.groupId, request.user._id.toString());
+  const groupId = request.params.groupId as string;
+  const { group } = await getGroupForAcceptedMember(groupId, request.user._id.toString());
 
   response.json({
     group: await serializeGroupOverview(group),
@@ -86,7 +87,8 @@ export const getGroup = asyncHandler(async (request, response) => {
 });
 
 export const updateGroup = asyncHandler(async (request, response) => {
-  const { group, member } = await getGroupForAcceptedMember(request.params.groupId, request.user._id.toString());
+  const groupId = request.params.groupId as string;
+  const { group, member } = await getGroupForAcceptedMember(groupId, request.user._id.toString());
   const { name, locationUpdateMode, isSharingLocation } = request.body as z.infer<typeof updateGroupSchema>["body"];
   const isHost = group.hostUserId.toString() === request.user._id.toString();
 
@@ -114,7 +116,8 @@ export const updateGroup = asyncHandler(async (request, response) => {
 });
 
 export const deleteGroup = asyncHandler(async (request, response) => {
-  const { group } = await getGroupForAcceptedMember(request.params.groupId, request.user._id.toString());
+  const groupId = request.params.groupId as string;
+  const { group } = await getGroupForAcceptedMember(groupId, request.user._id.toString());
 
   if (group.hostUserId.toString() !== request.user._id.toString()) {
     throw new HttpError(403, "Only the host can delete this group");
@@ -130,13 +133,17 @@ export const deleteGroup = asyncHandler(async (request, response) => {
 });
 
 export const leaveGroup = asyncHandler(async (request, response) => {
-  const { group, member } = await getGroupForAnyMember(request.params.groupId, request.user._id.toString());
+  const groupId = request.params.groupId as string;
+  const { group, member } = await getGroupForAnyMember(groupId, request.user._id.toString());
 
   if (member.role === "host") {
     throw new HttpError(400, "Hosts must delete the group instead of leaving it");
   }
 
-  group.members = group.members.filter((item) => item.phoneNumber !== member.phoneNumber);
+  const memberIndex = group.members.findIndex((item) => item.phoneNumber === member.phoneNumber);
+  if (memberIndex >= 0) {
+    group.members.splice(memberIndex, 1);
+  }
   await Promise.all([
     group.save(),
     Invitation.deleteMany({ groupId: group._id, invitedPhoneNumber: member.phoneNumber }),
@@ -147,7 +154,8 @@ export const leaveGroup = asyncHandler(async (request, response) => {
 });
 
 export const stopSharing = asyncHandler(async (request, response) => {
-  const { group, member } = await getGroupForAcceptedMember(request.params.groupId, request.user._id.toString());
+  const groupId = request.params.groupId as string;
+  const { group, member } = await getGroupForAcceptedMember(groupId, request.user._id.toString());
 
   member.isSharingLocation = false;
   await group.save();
@@ -159,7 +167,8 @@ export const stopSharing = asyncHandler(async (request, response) => {
 });
 
 export const getLatestLocations = asyncHandler(async (request, response) => {
-  const { group } = await getGroupForAcceptedMember(request.params.groupId, request.user._id.toString());
+  const groupId = request.params.groupId as string;
+  const { group } = await getGroupForAcceptedMember(groupId, request.user._id.toString());
   const acceptedUserIds = group.members
     .filter((member) => member.status === "accepted" && member.userId)
     .map((member) => member.userId);
@@ -172,7 +181,8 @@ export const getLatestLocations = asyncHandler(async (request, response) => {
 });
 
 export const getMembers = asyncHandler(async (request, response) => {
-  const { group } = await getGroupForAcceptedMember(request.params.groupId, request.user._id.toString());
+  const groupId = request.params.groupId as string;
+  const { group } = await getGroupForAcceptedMember(groupId, request.user._id.toString());
   const isHost = group.hostUserId.toString() === request.user._id.toString();
   const members = await getGroupMembersWithLocations(group._id.toString());
 

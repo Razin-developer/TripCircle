@@ -44,7 +44,8 @@ export const getInvitations = asyncHandler(async (request, response) => {
 });
 
 export const createInvitations = asyncHandler(async (request, response) => {
-  const group = await Group.findById(request.params.groupId);
+  const groupId = request.params.groupId as string;
+  const group = await Group.findById(groupId);
 
   if (!group) {
     throw new HttpError(404, "Group not found");
@@ -165,7 +166,7 @@ async function updateInvitationStatus(
 
 export const acceptInvitation = asyncHandler(async (request, response) => {
   const invitation = await updateInvitationStatus(
-    request.params.invitationId,
+    request.params.invitationId as string,
     {
       _id: request.user._id.toString(),
       phoneNumber: request.user.phoneNumber
@@ -177,7 +178,7 @@ export const acceptInvitation = asyncHandler(async (request, response) => {
 
 export const declineInvitation = asyncHandler(async (request, response) => {
   const invitation = await updateInvitationStatus(
-    request.params.invitationId,
+    request.params.invitationId as string,
     {
       _id: request.user._id.toString(),
       phoneNumber: request.user.phoneNumber
