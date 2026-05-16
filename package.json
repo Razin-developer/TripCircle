@@ -1,0 +1,15 @@
+{
+  "name": "tripcircle",
+  "private": true,
+  "version": "1.0.0",
+  "workspaces": [
+    "apps/mobile",
+    "server"
+  ],
+  "scripts": {
+    "dev:server": "npm --workspace server run dev",
+    "dev:mobile": "npm --workspace @tripcircle/mobile run start",
+    "lint": "npm --workspace server run lint && npm --workspace @tripcircle/mobile run lint",
+    "typecheck": "npm --workspace server run typecheck && npm --workspace @tripcircle/mobile run typecheck"
+  }
+}

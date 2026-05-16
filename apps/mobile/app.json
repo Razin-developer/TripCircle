@@ -1,0 +1,52 @@
+{
+  "expo": {
+    "name": "TripCircle",
+    "slug": "tripcircle",
+    "scheme": "tripcircle",
+    "version": "1.0.0",
+    "orientation": "portrait",
+    "userInterfaceStyle": "light",
+    "plugins": [
+      [
+        "expo-location",
+        {
+          "locationAlwaysAndWhenInUsePermission": "Allow TripCircle to share your live trip location with accepted family members while you travel together.",
+          "locationWhenInUsePermission": "Allow TripCircle to use your location while you are viewing live family trips.",
+          "isAndroidBackgroundLocationEnabled": true,
+          "isIosBackgroundLocationEnabled": true
+        }
+      ],
+      [
+        "expo-contacts",
+        {
+          "contactsPermission": "Allow TripCircle to access your contacts so you can invite family members to a trip."
+        }
+      ],
+      "expo-notifications"
+    ],
+    "ios": {
+      "supportsTablet": true,
+      "bundleIdentifier": "com.tripcircle.app",
+      "infoPlist": {
+        "UIBackgroundModes": [
+          "location"
+        ]
+      }
+    },
+    "android": {
+      "package": "com.tripcircle.app",
+      "permissions": [
+        "ACCESS_COARSE_LOCATION",
+        "ACCESS_FINE_LOCATION",
+        "ACCESS_BACKGROUND_LOCATION",
+        "READ_CONTACTS",
+        "POST_NOTIFICATIONS"
+      ]
+    },
+    "extra": {
+      "eas": {
+        "projectId": "replace-with-your-project-id"
+      }
+    }
+  }
+}
