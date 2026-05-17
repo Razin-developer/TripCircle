@@ -1,14 +1,13 @@
 import { createServer } from "node:http";
 
-import { createApp } from "./app.js";
 import { connectDatabase } from "./config/db.js";
 import { env } from "./config/env.js";
+import app from "./index.js";
 import { createSocketServer } from "./sockets/index.js";
 
 async function bootstrap() {
   await connectDatabase();
 
-  const app = createApp();
   const server = createServer(app);
   createSocketServer(server);
 
@@ -17,7 +16,11 @@ async function bootstrap() {
   });
 }
 
-bootstrap().catch((error) => {
-  console.error("Failed to start server", error);
-  process.exit(1);
-});
+if (!process.env.VERCEL) {
+  bootstrap().catch((error) => {
+    console.error("Failed to start server", error);
+    process.exit(1);
+  });
+}
+
+export default app;

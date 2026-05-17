@@ -149,6 +149,32 @@ Required environment variables on Render:
 
 You usually do not need to set `PORT` manually because Render provides it for web services.
 
+## Deploying the Server on Vercel
+
+The `server` workspace is now shaped so Vercel can run it as an Express-backed serverless function.
+
+Important:
+
+- Vercel can run the REST API.
+- Vercel Functions do not support acting as a WebSocket server.
+- That means the current Socket.IO realtime layer will not work when this backend is deployed only on Vercel.
+
+For Vercel deployment:
+
+1. Create a separate Vercel project with `server` as the project root.
+2. Add environment variables:
+   - `MONGODB_URI`
+   - `JWT_SECRET`
+   - `CLIENT_ORIGIN`
+3. Redeploy.
+4. Test `https://your-project.vercel.app/health` and `https://your-project.vercel.app/`.
+
+Recommended production setup for full TripCircle behavior:
+
+- Deploy the Expo/mobile client wherever you like.
+- Deploy the REST API on Vercel only if you are okay losing Socket.IO realtime features.
+- Deploy the backend on a long-running Node host like Railway, Render, Fly.io, or a VPS if you want Socket.IO rooms and online/offline presence to work.
+
 ## 5. Run the Expo App
 
 From the repo root:
@@ -202,6 +228,7 @@ The background task also avoids sending duplicate updates when the device has no
 
 - The auth flow is intentionally simplified and uses a mock OTP-style experience instead of a real SMS provider.
 - Push notifications are not fully wired yet; the realtime invitation flow currently depends on Socket.IO while the app is running.
+- Vercel is not a full fit for the current realtime backend because Vercel Functions do not act as WebSocket servers.
 - Reverse geocoding is done on the device, so some background updates may not resolve place names if the OS throttles network access.
 - `react-native-maps` uses OpenStreetMap tiles here, but the base map behavior still depends on native map support on the device.
 - Presence is socket-based, so a member may appear offline if the app is killed even if background location later resumes.
