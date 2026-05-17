@@ -53,3 +53,5 @@ apps/flutter/app.*.map.json
 apps/flutter/android/app/debug
 apps/flutter/android/app/profile
 apps/flutter/android/app/release
+
+release-keystore.jks
