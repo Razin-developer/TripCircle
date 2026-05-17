@@ -69,10 +69,6 @@ class _GroupMapScreenState extends State<GroupMapScreen> {
     SocketService.instance.off('member:online', _memberOnlineHandler);
     SocketService.instance.off('member:offline', _memberOfflineHandler);
     SocketService.instance.off('group:membersUpdated', _membersUpdatedHandler);
-    for (final timer in _updateAnimationTimers.values) {
-      timer.cancel();
-    }
-    _updateAnimationTimers.clear();
     unawaited(AppLogger.instance.info('map', 'Group map live socket listeners removed', data: {'groupId': widget.groupId}));
     super.dispose();
   }
@@ -160,42 +156,7 @@ class _GroupMapScreenState extends State<GroupMapScreen> {
       );
     });
 
-    _markMemberRecentlyUpdated(userId);
-
     unawaited(AppLogger.instance.info('map', 'Applied live location update', data: {'groupId': widget.groupId, 'userId': userId}));
-  }
-
-  void _markMemberRecentlyUpdated(String userId) {
-    _updateAnimationTimers[userId]?.cancel();
-    if (mounted) {
-      setState(() {
-        _recentlyUpdatedUserIds.add(userId);
-      });
-    }
-    _updateAnimationTimers[userId] = Timer(const Duration(milliseconds: 2600), () {
-      _updateAnimationTimers.remove(userId);
-      if (!mounted) {
-        return;
-      }
-      setState(() {
-        _recentlyUpdatedUserIds.remove(userId);
-      });
-    });
-  }
-
-  void _showMemberDetails(GroupMember member) {
-    final location = member.location;
-    if (location == null) {
-      return;
-    }
-
-    unawaited(AppLogger.instance.info('map', 'Opened map member details', data: {'groupId': widget.groupId, 'userId': member.userId}));
-    showModalBottomSheet<void>(
-      context: context,
-      showDragHandle: true,
-      backgroundColor: Theme.of(context).scaffoldBackgroundColor,
-      builder: (context) => _MemberLocationSheet(member: member),
-    );
   }
 
   void _handleMemberOnline(dynamic payload) {
@@ -245,309 +206,27 @@ class _GroupMapScreenState extends State<GroupMapScreen> {
     final onlineCount = acceptedMembers.where((member) => member.isOnline).length;
 
     return Scaffold(
-      extendBodyBehindAppBar: true,
-      body: Stack(
-        children: [
-          Positioned.fill(
-            child: loading && detail == null
-                ? const _MapLoadingView()
-                : _InteractiveOpenStreetMap(
-                    members: locatedMembers,
-                    currentUserId: widget.controller.user?.id,
-                    recentlyUpdatedUserIds: _recentlyUpdatedUserIds,
-                    onMarkerTap: _showMemberDetails,
-                  ),
-          ),
-          SafeArea(
-            child: Padding(
-              padding: const EdgeInsets.fromLTRB(16, 8, 16, 0),
-              child: _MapHeaderOverlay(
-                groupName: detail?.group.name ?? widget.groupName,
-                onlineCount: onlineCount,
-                acceptedCount: detail?.group.acceptedCount ?? acceptedMembers.length,
-                locatedCount: locatedMembers.length,
-                loading: loading,
-                onBack: () => Navigator.of(context).maybePop(),
-                onRefresh: _loadGroup,
-              ),
-            ),
-          ),
-          if (me?.isSharingLocation != true)
-            Positioned(
-              left: 16,
-              right: 16,
-              bottom: 24 + MediaQuery.of(context).padding.bottom,
-              child: _SharingOffOverlay(
-                onEnable: () {
-                  Navigator.of(context).push(
-                    MaterialPageRoute(
-                      settings: RouteSettings(name: 'LocationPermissionScreen:${widget.groupId}'),
-                      builder: (_) => LocationPermissionScreen(
-                        controller: widget.controller,
-                        groupId: widget.groupId,
-                        groupName: widget.groupName,
-                        mode: me?.locationUpdateMode ?? 'balanced',
-                        replaceWithGroupTabs: false,
-                      ),
-                    ),
-                  ).then((_) => _loadGroup());
-                },
-              ),
-            )
-          else if (!loading && locatedMembers.isEmpty)
-            Positioned(
-              left: 16,
-              right: 16,
-              bottom: 24 + MediaQuery.of(context).padding.bottom,
-              child: const _NoLocationsOverlay(),
-            ),
-        ],
-      ),
-    );
-  }
-}
-
-class _MapHeaderOverlay extends StatelessWidget {
-  const _MapHeaderOverlay({
-    required this.groupName,
-    required this.onlineCount,
-    required this.acceptedCount,
-    required this.locatedCount,
-    required this.loading,
-    required this.onBack,
-    required this.onRefresh,
-  });
-
-  final String groupName;
-  final int onlineCount;
-  final int acceptedCount;
-  final int locatedCount;
-  final bool loading;
-  final VoidCallback onBack;
-  final Future<void> Function() onRefresh;
-
-  @override
-  Widget build(BuildContext context) {
-    final theme = Theme.of(context);
-    return DecoratedBox(
-      decoration: BoxDecoration(
-        color: theme.cardColor.withValues(alpha: 0.93),
-        borderRadius: BorderRadius.circular(26),
-        border: Border.all(color: theme.dividerColor.withValues(alpha: 0.45)),
-        boxShadow: const [BoxShadow(color: Color(0x24000000), blurRadius: 18, offset: Offset(0, 8))],
-      ),
-      child: Padding(
-        padding: const EdgeInsets.all(12),
-        child: Row(
-          children: [
-            _CircleMapButton(icon: Icons.arrow_back_rounded, onPressed: onBack, tooltip: 'Back'),
-            const SizedBox(width: 12),
-            Expanded(
-              child: Column(
-                crossAxisAlignment: CrossAxisAlignment.start,
-                mainAxisSize: MainAxisSize.min,
-                children: [
-                  Text(
-                    groupName,
-                    maxLines: 1,
-                    overflow: TextOverflow.ellipsis,
-                    style: theme.textTheme.titleMedium?.copyWith(fontWeight: FontWeight.w900),
-                  ),
-                  const SizedBox(height: 3),
-                  Text(
-                    loading ? 'Refreshing live map...' : '$onlineCount online • $locatedCount on map • $acceptedCount accepted',
-                    maxLines: 1,
-                    overflow: TextOverflow.ellipsis,
-                    style: theme.textTheme.bodySmall?.copyWith(color: theme.hintColor),
-                  ),
-                ],
-              ),
-            ),
-            const SizedBox(width: 8),
-            _CircleMapButton(icon: Icons.refresh_rounded, onPressed: () => unawaited(onRefresh()), tooltip: 'Refresh'),
-          ],
-        ),
-      ),
-    );
-  }
-}
-
-class _InteractiveOpenStreetMap extends StatefulWidget {
-  const _InteractiveOpenStreetMap({
-    required this.members,
-    required this.currentUserId,
-    required this.recentlyUpdatedUserIds,
-    required this.onMarkerTap,
-  });
-
-  final List<GroupMember> members;
-  final String? currentUserId;
-  final Set<String> recentlyUpdatedUserIds;
-  final ValueChanged<GroupMember> onMarkerTap;
-
-  @override
-  State<_InteractiveOpenStreetMap> createState() => _InteractiveOpenStreetMapState();
-}
-
-class _InteractiveOpenStreetMapState extends State<_InteractiveOpenStreetMap> {
-  static const int _minZoom = 2;
-  static const int _maxZoom = 18;
-
-  Offset? _centerPixel;
-  int _zoom = 13;
-  Offset _scaleStartCenter = Offset.zero;
-  Offset _scaleStartFocal = Offset.zero;
-  int _scaleStartZoom = 13;
-  Size _viewportSize = Size.zero;
-  bool _hasUserMovedMap = false;
-
-  @override
-  void didUpdateWidget(covariant _InteractiveOpenStreetMap oldWidget) {
-    super.didUpdateWidget(oldWidget);
-    if (_centerPixel == null || (!_hasUserMovedMap && oldWidget.members.length != widget.members.length)) {
-      _resetCenter();
-    }
-  }
-
-  void _resetCenter() {
-    final center = _centerFor(widget.members);
-    _zoom = widget.members.isEmpty ? 5 : 13;
-    _centerPixel = _project(center.latitude, center.longitude, _zoom);
-    _hasUserMovedMap = false;
-  }
-
-  void _zoomBy(int delta) {
-    final nextZoom = (_zoom + delta).clamp(_minZoom, _maxZoom).toInt();
-    if (nextZoom == _zoom) {
-      return;
-    }
-    setState(() {
-      final center = _centerPixel ?? _project(_defaultLatitude, _defaultLongitude, _zoom);
-      final scale = math.pow(2, nextZoom - _zoom).toDouble();
-      _centerPixel = center * scale;
-      _zoom = nextZoom;
-      _hasUserMovedMap = true;
-    });
-  }
-
-  void _recenter() {
-    setState(_resetCenter);
-  }
-
-  void _onScaleStart(ScaleStartDetails details) {
-    _scaleStartCenter = _centerPixel ?? _project(_centerFor(widget.members).latitude, _centerFor(widget.members).longitude, _zoom);
-    _scaleStartFocal = details.localFocalPoint;
-    _scaleStartZoom = _zoom;
-  }
-
-  void _onScaleUpdate(ScaleUpdateDetails details) {
-    if (_viewportSize == Size.zero) {
-      return;
-    }
-
-    final zoomDelta = math.log(details.scale) / math.ln2;
-    final nextZoom = (_scaleStartZoom + zoomDelta.round()).clamp(_minZoom, _maxZoom).toInt();
-    final panDelta = details.localFocalPoint - _scaleStartFocal;
-
-    setState(() {
-      if (nextZoom == _scaleStartZoom) {
-        _centerPixel = _scaleStartCenter - panDelta;
-      } else {
-        final oldFocalPixel = _scaleStartCenter + (_scaleStartFocal - Offset(_viewportSize.width / 2, _viewportSize.height / 2));
-        final oldFocalLatLng = _unproject(oldFocalPixel.dx, oldFocalPixel.dy, _scaleStartZoom);
-        final newFocalPixel = _project(oldFocalLatLng.latitude, oldFocalLatLng.longitude, nextZoom);
-        _centerPixel = newFocalPixel - (details.localFocalPoint - Offset(_viewportSize.width / 2, _viewportSize.height / 2));
-      }
-      _zoom = nextZoom;
-      _hasUserMovedMap = true;
-    });
-  }
-
-  @override
-  Widget build(BuildContext context) {
-    if (_centerPixel == null) {
-      _resetCenter();
-    }
-
-    return LayoutBuilder(
-      builder: (context, constraints) {
-        final width = constraints.maxWidth;
-        final height = constraints.maxHeight;
-        _viewportSize = Size(width, height);
-        final centerPixel = _centerPixel!;
-        final centerTileX = (centerPixel.dx / _tileSize).floor();
-        final centerTileY = (centerPixel.dy / _tileSize).floor();
-        final tileRadiusX = (width / _tileSize / 2).ceil() + 2;
-        final tileRadiusY = (height / _tileSize / 2).ceil() + 2;
-        final maxTile = math.pow(2, _zoom).toInt();
-        final tiles = <Widget>[];
-
-        for (var x = centerTileX - tileRadiusX; x <= centerTileX + tileRadiusX; x++) {
-          for (var y = centerTileY - tileRadiusY; y <= centerTileY + tileRadiusY; y++) {
-            if (y < 0 || y >= maxTile) {
-              continue;
-            }
-            final wrappedX = ((x % maxTile) + maxTile) % maxTile;
-            final left = width / 2 + (x * _tileSize) - centerPixel.dx;
-            final top = height / 2 + (y * _tileSize) - centerPixel.dy;
-            tiles.add(
-              Positioned(
-                left: left,
-                top: top,
-                width: _tileSize,
-                height: _tileSize,
-                child: Image.network(
-                  'https://tile.openstreetmap.org/$_zoom/$wrappedX/$y.png',
-                  fit: BoxFit.cover,
-                  errorBuilder: (context, error, stackTrace) => Container(color: const Color(0xFFE8EEF7)),
-                ),
-              ),
-            );
-          }
-        }
-
-        return GestureDetector(
-          behavior: HitTestBehavior.opaque,
-          onScaleStart: _onScaleStart,
-          onScaleUpdate: _onScaleUpdate,
-          child: ColoredBox(
-            color: const Color(0xFFE8EEF7),
-            child: Stack(
-              clipBehavior: Clip.hardEdge,
-              children: [
-                ...tiles,
-                ...widget.members.map((member) {
-                  final location = member.location!;
-                  final point = _project(location.latitude, location.longitude, _zoom);
-                  final left = width / 2 + point.dx - centerPixel.dx;
-                  final top = height / 2 + point.dy - centerPixel.dy;
-                  return AnimatedPositioned(
-                    key: ValueKey('map-marker-${member.userId}'),
-                    duration: const Duration(milliseconds: 850),
-                    curve: Curves.easeOutCubic,
-                    left: left - 22,
-                    top: top - 22,
-                    child: _MapMarker(
-                      member: member,
-                      isCurrentUser: member.userId == widget.currentUserId,
-                      isRecentlyUpdated: widget.recentlyUpdatedUserIds.contains(member.userId),
-                      onTap: () => widget.onMarkerTap(member),
-                    ),
-                  );
-                }),
-                Positioned(
-                  right: 16,
-                  bottom: 44 + MediaQuery.of(context).padding.bottom,
-                  child: Column(
-                    mainAxisSize: MainAxisSize.min,
-                    children: [
-                      _CircleMapButton(icon: Icons.add_rounded, onPressed: () => _zoomBy(1), tooltip: 'Zoom in'),
-                      const SizedBox(height: 10),
-                      _CircleMapButton(icon: Icons.remove_rounded, onPressed: () => _zoomBy(-1), tooltip: 'Zoom out'),
-                      const SizedBox(height: 10),
-                      _CircleMapButton(icon: Icons.my_location_rounded, onPressed: _recenter, tooltip: 'Recenter'),
-                    ],
-                  ),
+      body: ScreenShell(
+        screenName: 'GroupMapScreen',
+        logData: {
+          'groupId': widget.groupId,
+          'groupName': widget.groupName,
+        },
+        title: widget.groupName,
+        subtitle: 'Live trip view for your accepted members.',
+        child: RefreshIndicator(
+          onRefresh: _loadGroup,
+          child: ListView(
+            children: [
+              if (loading)
+                const GlassCard(child: Text('Loading group...'))
+              else ...[
+                _LiveMapCard(
+                  groupName: detail?.group.name ?? widget.groupName,
+                  onlineCount: onlineCount,
+                  acceptedCount: detail?.group.acceptedCount ?? acceptedMembers.length,
+                  members: locatedMembers,
+                  currentUserId: widget.controller.user?.id,
                 ),
                 Positioned(
                   left: 12,
@@ -562,80 +241,42 @@ class _InteractiveOpenStreetMapState extends State<_InteractiveOpenStreetMap> {
                       child: Text('© OpenStreetMap contributors', style: TextStyle(fontSize: 10, color: Colors.black87)),
                     ),
                   ),
-                ),
-              ],
-            ),
-          ),
-        );
-      },
-    );
-  }
-}
-
-class _MapMarker extends StatefulWidget {
-  const _MapMarker({required this.member, required this.isCurrentUser, required this.isRecentlyUpdated, required this.onTap});
-
-  final GroupMember member;
-  final bool isCurrentUser;
-  final bool isRecentlyUpdated;
-  final VoidCallback onTap;
-
-  @override
-  State<_MapMarker> createState() => _MapMarkerState();
-}
-
-class _MapMarkerState extends State<_MapMarker> with SingleTickerProviderStateMixin {
-  late final AnimationController _pulseController;
-
-  @override
-  void initState() {
-    super.initState();
-    _pulseController = AnimationController(vsync: this, duration: const Duration(milliseconds: 1100));
-    if (widget.isRecentlyUpdated) {
-      _pulseController.repeat(reverse: true);
-    }
-  }
-
-  @override
-  void didUpdateWidget(covariant _MapMarker oldWidget) {
-    super.didUpdateWidget(oldWidget);
-    if (widget.isRecentlyUpdated && !_pulseController.isAnimating) {
-      _pulseController.repeat(reverse: true);
-    } else if (!widget.isRecentlyUpdated && _pulseController.isAnimating) {
-      _pulseController.stop();
-      _pulseController.value = 0;
-    }
-  }
-
-  @override
-  void dispose() {
-    _pulseController.dispose();
-    super.dispose();
-  }
-
-  @override
-  Widget build(BuildContext context) {
-    final color = _parseColor(widget.member.user?.avatarColor) ?? Theme.of(context).colorScheme.primary;
-
-    return GestureDetector(
-      onTap: widget.onTap,
-      child: AnimatedBuilder(
-        animation: _pulseController,
-        builder: (context, child) {
-          final pulse = widget.isRecentlyUpdated ? _pulseController.value : 0.0;
-          return SizedBox(
-            width: 44,
-            height: 44,
-            child: Stack(
-              alignment: Alignment.center,
-              children: [
-                if (widget.isRecentlyUpdated)
-                  Transform.scale(
-                    scale: 1.15 + pulse * 0.55,
-                    child: DecoratedBox(
-                      decoration: BoxDecoration(
-                        shape: BoxShape.circle,
-                        color: color.withValues(alpha: 0.20 - pulse * 0.08),
+                const SizedBox(height: 16),
+                if (locatedMembers.isEmpty)
+                  const EmptyState(
+                    title: 'No valid live locations yet',
+                    body: 'Accepted travellers will appear here once sharing is enabled and the backend receives location updates.',
+                  )
+                else
+                  ...locatedMembers.map(
+                    (member) => Padding(
+                      padding: const EdgeInsets.only(bottom: 12),
+                      child: GlassCard(
+                        child: Column(
+                          crossAxisAlignment: CrossAxisAlignment.start,
+                          children: [
+                            Text(
+                              member.user?.name ?? member.phoneNumber,
+                              style: Theme.of(context).textTheme.titleMedium?.copyWith(fontWeight: FontWeight.w800),
+                            ),
+                            const SizedBox(height: 4),
+                            Text('@${member.user?.username ?? member.location?.username ?? 'unknown'}'),
+                            const SizedBox(height: 8),
+                            Text(
+                              '${member.location!.latitude.toStringAsFixed(5)}, ${member.location!.longitude.toStringAsFixed(5)}',
+                            ),
+                            const SizedBox(height: 4),
+                            Text(
+                              '${member.location?.nearbyPlaceName.isNotEmpty == true ? member.location!.nearbyPlaceName : 'Unknown area'} • ${member.location?.state ?? 'State unavailable'} • ${member.location?.country ?? 'Country unavailable'}',
+                              style: Theme.of(context).textTheme.bodyMedium?.copyWith(color: Theme.of(context).hintColor),
+                            ),
+                            const SizedBox(height: 4),
+                            Text(
+                              'Updated ${formatRelativeTime(member.location?.updatedAt ?? member.lastSeenAt)}',
+                              style: Theme.of(context).textTheme.bodyMedium?.copyWith(color: Theme.of(context).hintColor),
+                            ),
+                          ],
+                        ),
                       ),
                       child: const SizedBox(width: 38, height: 38),
                     ),
@@ -804,37 +445,221 @@ class _MemberLocationSheet extends StatelessWidget {
   }
 }
 
-class _LocationDetailRow extends StatelessWidget {
-  const _LocationDetailRow({required this.icon, required this.label, required this.value});
+class _LiveMapCard extends StatelessWidget {
+  const _LiveMapCard({
+    required this.groupName,
+    required this.onlineCount,
+    required this.acceptedCount,
+    required this.members,
+    required this.currentUserId,
+  });
 
-  final IconData icon;
-  final String label;
-  final String value;
+  final String groupName;
+  final int onlineCount;
+  final int acceptedCount;
+  final List<GroupMember> members;
+  final String? currentUserId;
 
   @override
   Widget build(BuildContext context) {
-    final theme = Theme.of(context);
-    return Padding(
-      padding: const EdgeInsets.only(bottom: 14),
-      child: Row(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          Icon(icon, color: theme.colorScheme.primary),
-          const SizedBox(width: 12),
-          Expanded(
-            child: Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                Text(label, style: theme.textTheme.titleSmall?.copyWith(fontWeight: FontWeight.w800)),
-                const SizedBox(height: 2),
-                Text(value, style: theme.textTheme.bodyMedium?.copyWith(color: theme.hintColor)),
-              ],
-            ),
+    final center = _centerFor(members);
+    final zoom = members.isEmpty ? 5 : 13;
+
+    return GlassCard(
+      padding: EdgeInsets.zero,
+      child: ClipRRect(
+        borderRadius: BorderRadius.circular(28),
+        child: SizedBox(
+          height: 360,
+          child: Stack(
+            children: [
+              _OpenStreetMapPreview(center: center, zoom: zoom, members: members, currentUserId: currentUserId),
+              Positioned(
+                top: 16,
+                left: 16,
+                right: 16,
+                child: DecoratedBox(
+                  decoration: BoxDecoration(
+                    color: Theme.of(context).cardColor.withValues(alpha: 0.92),
+                    borderRadius: BorderRadius.circular(22),
+                    border: Border.all(color: Theme.of(context).dividerColor.withValues(alpha: 0.5)),
+                  ),
+                  child: Padding(
+                    padding: const EdgeInsets.all(16),
+                    child: Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      mainAxisSize: MainAxisSize.min,
+                      children: [
+                        Text(
+                          groupName,
+                          style: Theme.of(context).textTheme.titleLarge?.copyWith(fontWeight: FontWeight.w900),
+                        ),
+                        const SizedBox(height: 4),
+                        Text(
+                          '$onlineCount online • $acceptedCount accepted',
+                          style: Theme.of(context).textTheme.bodyMedium?.copyWith(color: Theme.of(context).hintColor),
+                        ),
+                        if (members.isEmpty) ...[
+                          const SizedBox(height: 6),
+                          Text(
+                            'No valid live locations yet.',
+                            style: Theme.of(context).textTheme.bodyMedium?.copyWith(color: Theme.of(context).hintColor),
+                          ),
+                        ],
+                      ],
+                    ),
+                  ),
+                ),
+              ),
+              Positioned(
+                right: 12,
+                bottom: 10,
+                child: DecoratedBox(
+                  decoration: BoxDecoration(
+                    color: Colors.white.withValues(alpha: 0.86),
+                    borderRadius: BorderRadius.circular(10),
+                  ),
+                  child: const Padding(
+                    padding: EdgeInsets.symmetric(horizontal: 8, vertical: 4),
+                    child: Text('© OpenStreetMap contributors', style: TextStyle(fontSize: 10, color: Colors.black87)),
+                  ),
+                ),
+              ),
+            ],
           ),
-        ],
+        ),
       ),
     );
   }
+}
+
+class _OpenStreetMapPreview extends StatelessWidget {
+  const _OpenStreetMapPreview({
+    required this.center,
+    required this.zoom,
+    required this.members,
+    required this.currentUserId,
+  });
+
+  final _LatLng center;
+  final int zoom;
+  final List<GroupMember> members;
+  final String? currentUserId;
+
+  @override
+  Widget build(BuildContext context) {
+    return LayoutBuilder(
+      builder: (context, constraints) {
+        final width = constraints.maxWidth;
+        final height = constraints.maxHeight;
+        final centerPixel = _project(center.latitude, center.longitude, zoom);
+        final centerTileX = (centerPixel.dx / _tileSize).floor();
+        final centerTileY = (centerPixel.dy / _tileSize).floor();
+        final tileRadiusX = (width / _tileSize / 2).ceil() + 1;
+        final tileRadiusY = (height / _tileSize / 2).ceil() + 1;
+        final maxTile = math.pow(2, zoom).toInt();
+        final tiles = <Widget>[];
+
+        for (var x = centerTileX - tileRadiusX; x <= centerTileX + tileRadiusX; x++) {
+          for (var y = centerTileY - tileRadiusY; y <= centerTileY + tileRadiusY; y++) {
+            if (y < 0 || y >= maxTile) {
+              continue;
+            }
+            final wrappedX = ((x % maxTile) + maxTile) % maxTile;
+            final left = width / 2 + (x * _tileSize) - centerPixel.dx;
+            final top = height / 2 + (y * _tileSize) - centerPixel.dy;
+            tiles.add(
+              Positioned(
+                left: left,
+                top: top,
+                width: _tileSize,
+                height: _tileSize,
+                child: Image.network(
+                  'https://tile.openstreetmap.org/$zoom/$wrappedX/$y.png',
+                  fit: BoxFit.cover,
+                  errorBuilder: (context, error, stackTrace) => Container(color: const Color(0xFFE8EEF7)),
+                ),
+              ),
+            );
+          }
+        }
+
+        return ColoredBox(
+          color: const Color(0xFFE8EEF7),
+          child: Stack(
+            clipBehavior: Clip.hardEdge,
+            children: [
+              ...tiles,
+              ...members.map((member) {
+                final location = member.location!;
+                final point = _project(location.latitude, location.longitude, zoom);
+                final left = width / 2 + point.dx - centerPixel.dx;
+                final top = height / 2 + point.dy - centerPixel.dy;
+                return Positioned(
+                  left: left - 24,
+                  top: top - 48,
+                  child: _MapMarker(member: member, isCurrentUser: member.userId == currentUserId),
+                );
+              }),
+            ],
+          ),
+        );
+      },
+    );
+  }
+}
+
+class _MapMarker extends StatelessWidget {
+  const _MapMarker({required this.member, required this.isCurrentUser});
+
+  final GroupMember member;
+  final bool isCurrentUser;
+
+  @override
+  Widget build(BuildContext context) {
+    final color = _parseColor(member.user?.avatarColor) ?? Theme.of(context).colorScheme.primary;
+
+    return Column(
+      mainAxisSize: MainAxisSize.min,
+      children: [
+        DecoratedBox(
+          decoration: BoxDecoration(
+            color: color,
+            borderRadius: BorderRadius.circular(22),
+            border: Border.all(color: isCurrentUser ? Colors.white : Theme.of(context).cardColor, width: isCurrentUser ? 3 : 1.5),
+            boxShadow: const [BoxShadow(color: Color(0x55000000), blurRadius: 10, offset: Offset(0, 4))],
+          ),
+          child: Padding(
+            padding: const EdgeInsets.symmetric(horizontal: 11, vertical: 10),
+            child: Text(
+              initialsFromName(member.user?.name ?? member.location?.username ?? 'TC'),
+              style: const TextStyle(color: Colors.white, fontWeight: FontWeight.w900),
+            ),
+          ),
+        ),
+        CustomPaint(size: const Size(14, 8), painter: _MarkerPointerPainter(color)),
+      ],
+    );
+  }
+}
+
+class _MarkerPointerPainter extends CustomPainter {
+  const _MarkerPointerPainter(this.color);
+
+  final Color color;
+
+  @override
+  void paint(Canvas canvas, Size size) {
+    final path = Path()
+      ..moveTo(0, 0)
+      ..lineTo(size.width / 2, size.height)
+      ..lineTo(size.width, 0)
+      ..close();
+    canvas.drawPath(path, Paint()..color = color);
+  }
+
+  @override
+  bool shouldRepaint(covariant _MarkerPointerPainter oldDelegate) => oldDelegate.color != color;
 }
 
 class _LatLng {
@@ -863,14 +688,6 @@ Offset _project(double latitude, double longitude, int zoom) {
   final x = (longitude + 180) / 360 * scale;
   final y = (0.5 - math.log((1 + sinLatitude) / (1 - sinLatitude)) / (4 * math.pi)) * scale;
   return Offset(x, y);
-}
-
-_LatLng _unproject(double x, double y, int zoom) {
-  final scale = _tileSize * math.pow(2, zoom);
-  final longitude = x / scale * 360 - 180;
-  final n = math.pi - 2 * math.pi * y / scale;
-  final latitude = 180 / math.pi * math.atan(0.5 * (math.exp(n) - math.exp(-n)));
-  return _LatLng(latitude, longitude);
 }
 
 Map<String, dynamic>? _asMap(dynamic value) {
