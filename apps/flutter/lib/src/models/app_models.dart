@@ -177,7 +177,15 @@ class LocationSnapshot {
   final double? batteryLevel;
 
   factory LocationSnapshot.fromJson(Map<String, dynamic> json) {
-    double? number(dynamic value) => value is num ? value.toDouble() : null;
+    double? number(dynamic value) {
+      if (value is num) {
+        return value.toDouble();
+      }
+      if (value is String) {
+        return double.tryParse(value);
+      }
+      return null;
+    }
 
     return LocationSnapshot(
       id: json['_id'] as String? ?? '',
@@ -190,11 +198,47 @@ class LocationSnapshot {
       nearbyPlaceName: json['nearbyPlaceName'] as String? ?? '',
       state: json['state'] as String? ?? '',
       country: json['country'] as String? ?? '',
-      updatedAt: json['updatedAt'] as String? ?? '',
+      updatedAt: json['updatedAt'] as String? ?? DateTime.now().toIso8601String(),
       accuracy: number(json['accuracy']),
       speed: number(json['speed']),
       heading: number(json['heading']),
       batteryLevel: number(json['batteryLevel']),
+    );
+  }
+
+  LocationSnapshot copyWith({
+    String? id,
+    String? groupId,
+    String? userId,
+    String? phoneNumber,
+    String? username,
+    double? latitude,
+    double? longitude,
+    String? nearbyPlaceName,
+    String? state,
+    String? country,
+    String? updatedAt,
+    double? accuracy,
+    double? speed,
+    double? heading,
+    double? batteryLevel,
+  }) {
+    return LocationSnapshot(
+      id: id ?? this.id,
+      groupId: groupId ?? this.groupId,
+      userId: userId ?? this.userId,
+      phoneNumber: phoneNumber ?? this.phoneNumber,
+      username: username ?? this.username,
+      latitude: latitude ?? this.latitude,
+      longitude: longitude ?? this.longitude,
+      nearbyPlaceName: nearbyPlaceName ?? this.nearbyPlaceName,
+      state: state ?? this.state,
+      country: country ?? this.country,
+      updatedAt: updatedAt ?? this.updatedAt,
+      accuracy: accuracy ?? this.accuracy,
+      speed: speed ?? this.speed,
+      heading: heading ?? this.heading,
+      batteryLevel: batteryLevel ?? this.batteryLevel,
     );
   }
 }
@@ -239,6 +283,34 @@ class GroupMember {
       lastSeenAt: json['lastSeenAt'] as String?,
       user: json['user'] is Map<String, dynamic> ? UserSummary.fromJson(json['user'] as Map<String, dynamic>) : null,
       location: json['location'] is Map<String, dynamic> ? LocationSnapshot.fromJson(json['location'] as Map<String, dynamic>) : null,
+    );
+  }
+
+  GroupMember copyWith({
+    String? userId,
+    String? phoneNumber,
+    String? role,
+    String? status,
+    bool? isOnline,
+    bool? isSharingLocation,
+    String? locationUpdateMode,
+    String? joinedAt,
+    String? lastSeenAt,
+    UserSummary? user,
+    LocationSnapshot? location,
+  }) {
+    return GroupMember(
+      userId: userId ?? this.userId,
+      phoneNumber: phoneNumber ?? this.phoneNumber,
+      role: role ?? this.role,
+      status: status ?? this.status,
+      isOnline: isOnline ?? this.isOnline,
+      isSharingLocation: isSharingLocation ?? this.isSharingLocation,
+      locationUpdateMode: locationUpdateMode ?? this.locationUpdateMode,
+      joinedAt: joinedAt ?? this.joinedAt,
+      lastSeenAt: lastSeenAt ?? this.lastSeenAt,
+      user: user ?? this.user,
+      location: location ?? this.location,
     );
   }
 }

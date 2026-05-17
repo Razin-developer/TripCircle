@@ -4,6 +4,7 @@ import 'package:flutter/material.dart';
 
 import '../models/app_models.dart';
 import '../services/app_logger.dart';
+import '../services/socket_service.dart';
 import '../services/tripcircle_api.dart';
 
 class AppController extends ChangeNotifier {
@@ -35,6 +36,7 @@ class AppController extends ChangeNotifier {
         token = session.token;
         user = session.user;
         pendingPhoneNumber = null;
+        unawaited(_connectSocket());
         await refreshHomeData();
         await AppLogger.instance.info(
           'auth',
@@ -80,6 +82,7 @@ class AppController extends ChangeNotifier {
       token = session.token;
       user = session.user;
       pendingPhoneNumber = null;
+      unawaited(_connectSocket());
       await refreshHomeData();
       await AppLogger.instance.info(
         'auth',
@@ -292,6 +295,14 @@ class AppController extends ChangeNotifier {
     });
   }
 
+  Future<void> ensureSocketConnected() async {
+    if (!isAuthenticated) {
+      return;
+    }
+
+    await _connectSocket();
+  }
+
   void logout() {
     unawaited(
       AppLogger.instance.info(
@@ -300,6 +311,7 @@ class AppController extends ChangeNotifier {
         data: {'userId': user?.id, 'username': user?.username},
       ),
     );
+    SocketService.instance.disconnect();
     token = null;
     user = null;
     pendingPhoneNumber = null;
@@ -307,6 +319,22 @@ class AppController extends ChangeNotifier {
     invitations = const [];
     errorMessage = null;
     notifyListeners();
+  }
+
+  @override
+  void dispose() {
+    SocketService.instance.disconnect();
+    super.dispose();
+  }
+
+  Future<void> _connectSocket() async {
+    final currentToken = token;
+    if (currentToken == null || currentToken.isEmpty) {
+      return;
+    }
+
+    await SocketService.instance.connect(currentToken);
+    SocketService.instance.joinUser();
   }
 
   Future<void> _run(Future<void> Function() action) async {
