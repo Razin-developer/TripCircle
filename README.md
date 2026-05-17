@@ -123,6 +123,32 @@ Main API groups:
 - `/api/groups`
 - `/api/invitations`
 
+## 4.1 Deploy the Server on Render
+
+Render is a much better fit for this backend than Vercel because this app uses a long-running Node server and Socket.IO.
+
+Important Render note:
+
+- Render runs the build command you configure.
+- If that command is only `npm run build`, then `tsc` runs before dependencies are installed.
+- That is exactly what causes errors like `Cannot find module 'express'` and `Cannot find type definition file for 'node'`.
+
+Recommended Render settings:
+
+- Root Directory: `server`
+- Build Command: `npm install && npm run build`
+- Start Command: `npm run start`
+
+This repo now includes [render.yaml](/C:/Users/razin/Desktop/Products/TripCircle/render.yaml) with those settings.
+
+Required environment variables on Render:
+
+- `MONGODB_URI`
+- `JWT_SECRET`
+- `CLIENT_ORIGIN`
+
+You usually do not need to set `PORT` manually because Render provides it for web services.
+
 ## 5. Run the Expo App
 
 From the repo root:
