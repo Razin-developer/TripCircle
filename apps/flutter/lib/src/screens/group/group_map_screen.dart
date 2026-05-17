@@ -9,7 +9,6 @@ import '../../services/socket_service.dart';
 import '../../state/app_controller.dart';
 import '../../utils/format.dart';
 import '../../widgets/glass_card.dart';
-import '../../widgets/primary_button.dart';
 
 const _defaultLatitude = 20.5937;
 const _defaultLongitude = 78.9629;
@@ -49,9 +48,11 @@ class _GroupMapScreenState extends State<GroupMapScreen> {
     _memberOfflineHandler = _handleMemberOffline;
     _membersUpdatedHandler = _handleMembersUpdated;
 
-    unawaited(widget.controller.ensureSocketConnected().then((_) {
-      SocketService.instance.joinGroup(widget.groupId);
-    }));
+    unawaited(
+      widget.controller.ensureSocketConnected().then((_) {
+        SocketService.instance.joinGroup(widget.groupId);
+      }),
+    );
 
     SocketService.instance.on('location:updated', _locationUpdatedHandler);
     SocketService.instance.on('member:online', _memberOnlineHandler);
@@ -66,7 +67,7 @@ class _GroupMapScreenState extends State<GroupMapScreen> {
       ),
     );
 
-    _loadGroup();
+    unawaited(_loadGroup());
   }
 
   @override
@@ -115,7 +116,10 @@ class _GroupMapScreenState extends State<GroupMapScreen> {
           'groupId': widget.groupId,
           'members': detail?.members.length ?? 0,
           'locatedMembers':
-              detail?.members.where((member) => _isValidLocation(member.location)).length ?? 0,
+              detail?.members
+                  .where((member) => _isValidLocation(member.location))
+                  .length ??
+              0,
         },
       ),
     );
@@ -157,21 +161,27 @@ class _GroupMapScreenState extends State<GroupMapScreen> {
             return member;
           }
 
+          final updatedAt =
+              data['updatedAt']?.toString() ?? DateTime.now().toIso8601String();
+
           return member.copyWith(
             isOnline: true,
-            lastSeenAt: data['updatedAt']?.toString() ?? DateTime.now().toIso8601String(),
+            lastSeenAt: updatedAt,
             location: LocationSnapshot(
               id: member.location?.id ?? 'live-$userId',
               groupId: widget.groupId,
               userId: userId,
               phoneNumber: data['phoneNumber']?.toString() ?? member.phoneNumber,
-              username: data['username']?.toString() ?? member.user?.username ?? 'unknown',
-              latitude: latitude!,
-              longitude: longitude!,
+              username:
+                  data['username']?.toString() ??
+                  member.user?.username ??
+                  'unknown',
+              latitude: latitude,
+              longitude: longitude,
               nearbyPlaceName: data['nearbyPlaceName']?.toString() ?? '',
               state: data['state']?.toString() ?? '',
               country: data['country']?.toString() ?? '',
-              updatedAt: data['updatedAt']?.toString() ?? DateTime.now().toIso8601String(),
+              updatedAt: updatedAt,
               accuracy: _toDouble(data['accuracy']),
               speed: _toDouble(data['speed']),
               heading: _toDouble(data['heading']),
@@ -244,29 +254,29 @@ class _GroupMapScreenState extends State<GroupMapScreen> {
 
     final acceptedMembers =
         detail?.members.where((member) => member.status == 'accepted').toList() ??
-            const <GroupMember>[];
+        const <GroupMember>[];
 
-    final locatedMembers =
-        acceptedMembers.where((member) => _isValidLocation(member.location)).toList();
+    final locatedMembers = acceptedMembers
+        .where((member) => _isValidLocation(member.location))
+        .toList();
 
     final onlineCount = acceptedMembers.where((member) => member.isOnline).length;
 
     return Scaffold(
       appBar: AppBar(
-  title: Column(
-    crossAxisAlignment: CrossAxisAlignment.start,
-    mainAxisSize: MainAxisSize.min,
-    children: [
-      Text(widget.groupName),
-      Text(
-        'Live trip view',
-        style: Theme.of(context).textTheme.bodySmall?.copyWith(
-              color: Theme.of(context).hintColor,
+        title: Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            Text(widget.groupName),
+            Text(
+              'Live trip view',
+              style: Theme.of(context).textTheme.bodySmall?.copyWith(
+                    color: Theme.of(context).hintColor,
+                  ),
             ),
-      ),
-    ],
-  ),
-),
+          ],
+        ),
       ),
       body: RefreshIndicator(
         onRefresh: _loadGroup,
@@ -299,7 +309,8 @@ class _GroupMapScreenState extends State<GroupMapScreen> {
               _LiveMapCard(
                 groupName: detail?.group.name ?? widget.groupName,
                 onlineCount: onlineCount,
-                acceptedCount: detail?.group.acceptedCount ?? acceptedMembers.length,
+                acceptedCount:
+                    detail?.group.acceptedCount ?? acceptedMembers.length,
                 members: locatedMembers,
                 currentUserId: widget.controller.user?.id,
               ),
@@ -331,8 +342,9 @@ class _GroupMapScreenState extends State<GroupMapScreen> {
                             Row(
                               children: [
                                 CircleAvatar(
-                                  backgroundColor: _parseColor(member.user?.avatarColor) ??
-                                      Theme.of(context).colorScheme.primary,
+                                  backgroundColor:
+                                      _parseColor(member.user?.avatarColor) ??
+                                          Theme.of(context).colorScheme.primary,
                                   child: Text(
                                     initialsFromName(
                                       member.user?.name ??
@@ -348,14 +360,17 @@ class _GroupMapScreenState extends State<GroupMapScreen> {
                                 const SizedBox(width: 12),
                                 Expanded(
                                   child: Column(
-                                    crossAxisAlignment: CrossAxisAlignment.start,
+                                    crossAxisAlignment:
+                                        CrossAxisAlignment.start,
                                     children: [
                                       Text(
                                         member.user?.name ?? member.phoneNumber,
                                         style: Theme.of(context)
                                             .textTheme
                                             .titleMedium
-                                            ?.copyWith(fontWeight: FontWeight.w800),
+                                            ?.copyWith(
+                                              fontWeight: FontWeight.w800,
+                                            ),
                                       ),
                                       const SizedBox(height: 2),
                                       Text(
@@ -363,7 +378,10 @@ class _GroupMapScreenState extends State<GroupMapScreen> {
                                         style: Theme.of(context)
                                             .textTheme
                                             .bodyMedium
-                                            ?.copyWith(color: Theme.of(context).hintColor),
+                                            ?.copyWith(
+                                              color:
+                                                  Theme.of(context).hintColor,
+                                            ),
                                       ),
                                     ],
                                   ),
@@ -376,7 +394,9 @@ class _GroupMapScreenState extends State<GroupMapScreen> {
                                         ? Colors.green
                                         : Theme.of(context).hintColor,
                                   ),
-                                  label: Text(member.isOnline ? 'Online' : 'Offline'),
+                                  label: Text(
+                                    member.isOnline ? 'Online' : 'Offline',
+                                  ),
                                 ),
                               ],
                             ),
@@ -387,14 +407,20 @@ class _GroupMapScreenState extends State<GroupMapScreen> {
                             const SizedBox(height: 4),
                             Text(
                               '${member.location?.nearbyPlaceName.isNotEmpty == true ? member.location!.nearbyPlaceName : 'Unknown area'} • ${member.location?.state ?? 'State unavailable'} • ${member.location?.country ?? 'Country unavailable'}',
-                              style: Theme.of(context).textTheme.bodyMedium?.copyWith(
+                              style: Theme.of(context)
+                                  .textTheme
+                                  .bodyMedium
+                                  ?.copyWith(
                                     color: Theme.of(context).hintColor,
                                   ),
                             ),
                             const SizedBox(height: 4),
                             Text(
                               'Updated ${formatRelativeTime(member.location?.updatedAt ?? member.lastSeenAt)}',
-                              style: Theme.of(context).textTheme.bodyMedium?.copyWith(
+                              style: Theme.of(context)
+                                  .textTheme
+                                  .bodyMedium
+                                  ?.copyWith(
                                     color: Theme.of(context).hintColor,
                                   ),
                             ),
@@ -459,111 +485,6 @@ class _SimpleEmptyState extends StatelessWidget {
   }
 }
 
-class _CircleMapButton extends StatelessWidget {
-  const _CircleMapButton({
-    required this.icon,
-    required this.onPressed,
-    required this.tooltip,
-  });
-
-  final IconData icon;
-  final VoidCallback onPressed;
-  final String tooltip;
-
-  @override
-  Widget build(BuildContext context) {
-    return Material(
-      color: Theme.of(context).cardColor.withValues(alpha: 0.94),
-      shape: const CircleBorder(),
-      elevation: 6,
-      shadowColor: Colors.black26,
-      child: IconButton(
-        icon: Icon(icon),
-        tooltip: tooltip,
-        onPressed: onPressed,
-      ),
-    );
-  }
-}
-
-class _SharingOffOverlay extends StatelessWidget {
-  const _SharingOffOverlay({required this.onEnable});
-
-  final VoidCallback onEnable;
-
-  @override
-  Widget build(BuildContext context) {
-    return GlassCard(
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        mainAxisSize: MainAxisSize.min,
-        children: [
-          Text(
-            'Live sharing is off for you',
-            style: Theme.of(context).textTheme.titleMedium?.copyWith(
-                  fontWeight: FontWeight.w800,
-                ),
-          ),
-          const SizedBox(height: 8),
-          Text(
-            'Your family can only see your dot after you explicitly enable live location.',
-            style: Theme.of(context).textTheme.bodyMedium?.copyWith(
-                  color: Theme.of(context).hintColor,
-                  height: 1.4,
-                ),
-          ),
-          const SizedBox(height: 14),
-          PrimaryButton(
-            label: 'Enable Sharing',
-            onPressed: onEnable,
-          ),
-        ],
-      ),
-    );
-  }
-}
-
-class _NoLocationsOverlay extends StatelessWidget {
-  const _NoLocationsOverlay();
-
-  @override
-  Widget build(BuildContext context) {
-    return GlassCard(
-      child: Row(
-        children: [
-          Icon(
-            Icons.location_off_rounded,
-            color: Theme.of(context).hintColor,
-          ),
-          const SizedBox(width: 12),
-          Expanded(
-            child: Text(
-              'No valid live locations yet. Accepted travellers appear as dots after sharing starts.',
-              style: Theme.of(context).textTheme.bodyMedium?.copyWith(
-                    color: Theme.of(context).hintColor,
-                  ),
-            ),
-          ),
-        ],
-      ),
-    );
-  }
-}
-
-class _MapLoadingView extends StatelessWidget {
-  const _MapLoadingView();
-
-  @override
-  Widget build(BuildContext context) {
-    return const ColoredBox(
-      color: Color(0xFFE8EEF7),
-      child: Center(
-        child: CircularProgressIndicator(),
-      ),
-    );
-  }
-}
-
 class _MemberLocationSheet extends StatelessWidget {
   const _MemberLocationSheet({required this.member});
 
@@ -573,7 +494,9 @@ class _MemberLocationSheet extends StatelessWidget {
   Widget build(BuildContext context) {
     final theme = Theme.of(context);
     final location = member.location!;
-    final color = _parseColor(member.user?.avatarColor) ?? theme.colorScheme.primary;
+    final color =
+        _parseColor(member.user?.avatarColor) ?? theme.colorScheme.primary;
+
     final place = location.nearbyPlaceName.isNotEmpty
         ? location.nearbyPlaceName
         : 'Unknown area';
@@ -645,7 +568,9 @@ class _MemberLocationSheet extends StatelessWidget {
               icon: Icons.schedule_rounded,
               label: 'Last updated',
               value: formatRelativeTime(
-                location.updatedAt.isNotEmpty ? location.updatedAt : member.lastSeenAt,
+                location.updatedAt.isNotEmpty
+                    ? location.updatedAt
+                    : member.lastSeenAt,
               ),
             ),
             if (location.accuracy != null)
@@ -768,7 +693,8 @@ class _LiveMapCard extends StatelessWidget {
                     color: Theme.of(context).cardColor.withValues(alpha: 0.92),
                     borderRadius: BorderRadius.circular(22),
                     border: Border.all(
-                      color: Theme.of(context).dividerColor.withValues(alpha: 0.5),
+                      color:
+                          Theme.of(context).dividerColor.withValues(alpha: 0.5),
                     ),
                   ),
                   child: Padding(
@@ -779,22 +705,27 @@ class _LiveMapCard extends StatelessWidget {
                       children: [
                         Text(
                           groupName,
-                          style: Theme.of(context).textTheme.titleLarge?.copyWith(
-                                fontWeight: FontWeight.w900,
-                              ),
+                          style:
+                              Theme.of(context).textTheme.titleLarge?.copyWith(
+                                    fontWeight: FontWeight.w900,
+                                  ),
                         ),
                         const SizedBox(height: 4),
                         Text(
                           '$onlineCount online • $acceptedCount accepted',
-                          style: Theme.of(context).textTheme.bodyMedium?.copyWith(
-                                color: Theme.of(context).hintColor,
-                              ),
+                          style:
+                              Theme.of(context).textTheme.bodyMedium?.copyWith(
+                                    color: Theme.of(context).hintColor,
+                                  ),
                         ),
                         if (members.isEmpty) ...[
                           const SizedBox(height: 6),
                           Text(
                             'No valid live locations yet.',
-                            style: Theme.of(context).textTheme.bodyMedium?.copyWith(
+                            style: Theme.of(context)
+                                .textTheme
+                                .bodyMedium
+                                ?.copyWith(
                                   color: Theme.of(context).hintColor,
                                 ),
                           ),
@@ -859,8 +790,12 @@ class _OpenStreetMapPreview extends StatelessWidget {
         final maxTile = math.pow(2, zoom).toInt();
         final tiles = <Widget>[];
 
-        for (var x = centerTileX - tileRadiusX; x <= centerTileX + tileRadiusX; x++) {
-          for (var y = centerTileY - tileRadiusY; y <= centerTileY + tileRadiusY; y++) {
+        for (var x = centerTileX - tileRadiusX;
+            x <= centerTileX + tileRadiusX;
+            x++) {
+          for (var y = centerTileY - tileRadiusY;
+              y <= centerTileY + tileRadiusY;
+              y++) {
             if (y < 0 || y >= maxTile) {
               continue;
             }
@@ -895,7 +830,11 @@ class _OpenStreetMapPreview extends StatelessWidget {
               ...tiles,
               ...members.map((member) {
                 final location = member.location!;
-                final point = _project(location.latitude, location.longitude, zoom);
+                final point = _project(
+                  location.latitude,
+                  location.longitude,
+                  zoom,
+                );
 
                 final left = width / 2 + point.dx - centerPixel.dx;
                 final top = height / 2 + point.dy - centerPixel.dy;
@@ -959,7 +898,9 @@ class _MapMarker extends StatelessWidget {
                     size: 20,
                   )
                 : Text(
-                    initialsFromName(member.user?.name ?? member.location?.username ?? 'TC'),
+                    initialsFromName(
+                      member.user?.name ?? member.location?.username ?? 'TC',
+                    ),
                     style: const TextStyle(
                       color: Colors.white,
                       fontWeight: FontWeight.w900,
