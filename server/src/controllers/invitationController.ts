@@ -11,12 +11,7 @@ import { normalizePhoneNumber } from "../utils/normalizePhone.js";
 
 export const createInvitationSchema = z.object({
   body: z.object({
-    contacts: z.array(
-      z.object({
-        name: z.string().trim().optional(),
-        phoneNumber: z.string().min(6)
-      })
-    ).min(1)
+    usernames: z.array(z.string().trim().min(3)).min(1)
   }),
   params: z.object({
     groupId: z.string().min(1)
@@ -58,15 +53,19 @@ export const createInvitations = asyncHandler(async (request, response) => {
 
   const createdInvitations = [];
 
-  for (const contact of body.contacts) {
-    const phoneNumber = normalizePhoneNumber(contact.phoneNumber);
+  for (const rawUsername of body.usernames) {
+    const invitedUser = await User.findOne({ username: rawUsername.trim().toLowerCase() });
+
+    if (!invitedUser) {
+      continue;
+    }
+
+    const phoneNumber = normalizePhoneNumber(invitedUser.phoneNumber);
     const alreadyExists = group.members.some((member) => member.phoneNumber === phoneNumber);
 
     if (alreadyExists) {
       continue;
     }
-
-    const invitedUser = await User.findOne({ phoneNumber });
 
     group.members.push({
       userId: invitedUser?._id ?? null,

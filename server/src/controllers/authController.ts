@@ -8,12 +8,13 @@ import { asyncHandler } from "../utils/asyncHandler.js";
 import { signJwt } from "../utils/jwt.js";
 import { normalizePhoneNumber } from "../utils/normalizePhone.js";
 import { HttpError } from "../utils/httpError.js";
+import { normalizeUsername, usernameSchema } from "../utils/username.js";
 
 const authSchema = z.object({
   body: z.object({
     phoneNumber: z.string().min(6),
     name: z.string().trim().min(2).max(60).optional(),
-    deviceName: z.string().trim().min(2).max(60).optional()
+    username: usernameSchema.optional()
   }),
   params: z.object({}).default({}),
   query: z.object({}).default({})
@@ -59,23 +60,31 @@ async function linkPendingGroupMembers(userId: string, phoneNumber: string) {
 }
 
 export const registerSchema = authSchema.refine(
-  (value) => Boolean(value.body.name && value.body.deviceName),
-  "Name and device name are required"
+  (value) => Boolean(value.body.name && value.body.username),
+  "Name and username are required"
 );
 
 export const loginSchema = authSchema;
 
 export const register = asyncHandler(async (request, response) => {
   const { body } = request.validated as z.infer<typeof registerSchema>;
-  const { phoneNumber, name, deviceName } = body;
+  const { phoneNumber, name, username } = body;
   const normalizedPhoneNumber = normalizePhoneNumber(phoneNumber);
+  const normalizedUsername = normalizeUsername(username!);
+
+  const existingUsernameOwner = await User.findOne({ username: normalizedUsername });
+
+  if (existingUsernameOwner && existingUsernameOwner.phoneNumber !== normalizedPhoneNumber) {
+    throw new HttpError(409, "Username already exists");
+  }
 
   const user = await User.findOneAndUpdate(
     { phoneNumber: normalizedPhoneNumber },
     {
       $set: {
         name,
-        deviceName,
+        username: normalizedUsername,
+        deviceName: normalizedUsername,
         avatarColor: getAvatarColor(normalizedPhoneNumber)
       }
     },

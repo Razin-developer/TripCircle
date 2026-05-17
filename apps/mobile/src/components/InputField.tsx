@@ -8,6 +8,8 @@ type InputFieldProps = {
   onChangeText: (value: string) => void;
   placeholder?: string;
   keyboardType?: "default" | "phone-pad";
+  autoCapitalize?: "none" | "sentences" | "words" | "characters";
+  autoCorrect?: boolean;
 };
 
 export function InputField({
@@ -15,7 +17,9 @@ export function InputField({
   value,
   onChangeText,
   placeholder,
-  keyboardType = "default"
+  keyboardType = "default",
+  autoCapitalize = "sentences",
+  autoCorrect = false
 }: InputFieldProps) {
   const theme = useTheme();
 
@@ -28,6 +32,8 @@ export function InputField({
         placeholder={placeholder}
         placeholderTextColor={theme.subtleText}
         keyboardType={keyboardType}
+        autoCapitalize={autoCapitalize}
+        autoCorrect={autoCorrect}
         style={{
           minHeight: 54,
           borderRadius: 18,

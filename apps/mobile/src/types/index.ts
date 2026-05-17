@@ -26,7 +26,7 @@ export type User = {
   _id: string;
   name: string;
   phoneNumber: string;
-  deviceName: string;
+  username: string;
   avatarColor: string;
   activeTheme: ThemeName;
   createdAt: string;
@@ -38,7 +38,7 @@ export type LocationSnapshot = {
   groupId: string;
   userId: string;
   phoneNumber: string;
-  deviceName: string;
+  username: string;
   latitude: number;
   longitude: number;
   accuracy?: number | null;
@@ -51,7 +51,9 @@ export type LocationSnapshot = {
   updatedAt: string;
 };
 
-export type MemberUserSummary = Pick<User, "_id" | "name" | "phoneNumber" | "deviceName" | "avatarColor" | "activeTheme">;
+export type MemberUserSummary = Pick<User, "_id" | "name" | "phoneNumber" | "username" | "avatarColor" | "activeTheme">;
+
+export type UserSearchResult = Pick<User, "_id" | "name" | "username" | "avatarColor">;
 
 export type GroupMember = {
   userId?: string | null;
@@ -109,7 +111,7 @@ export type LocationEventPayload = {
   groupId: string;
   userId: string;
   phoneNumber: string;
-  deviceName: string;
+  username: string;
   latitude: number;
   longitude: number;
   accuracy?: number | null;

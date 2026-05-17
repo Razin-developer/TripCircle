@@ -37,7 +37,7 @@ export function MemberRow({ member }: { member: GroupMember }) {
           {member.user?.name ?? member.phoneNumber}
         </Text>
         <Text style={{ color: theme.subtleText, fontSize: 13 }}>
-          {member.user?.deviceName ?? "Waiting for signup"}
+          {member.user?.username ? `@${member.user.username}` : "Waiting for signup"}
         </Text>
         <Text style={{ color: theme.subtleText, fontSize: 13 }}>
           {maskPhoneNumber(member.phoneNumber, showPhoneNumbers)}

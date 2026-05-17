@@ -18,7 +18,7 @@ const locationSchema = new Schema(
       type: String,
       required: true
     },
-    deviceName: {
+    username: {
       type: String,
       required: true
     },

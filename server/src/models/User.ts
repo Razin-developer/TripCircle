@@ -13,10 +13,19 @@ const userSchema = new Schema(
       unique: true,
       index: true
     },
-    deviceName: {
+    username: {
       type: String,
       required: true,
+      unique: true,
+      index: true,
+      lowercase: true,
       trim: true
+    },
+    deviceName: {
+      type: String,
+      required: false,
+      trim: true,
+      default: null
     },
     avatarColor: {
       type: String,
@@ -31,6 +40,8 @@ const userSchema = new Schema(
     timestamps: true
   }
 );
+
+userSchema.index({ username: 1 }, { unique: true });
 
 export type UserDocument = HydratedDocument<InferSchemaType<typeof userSchema>>;
 

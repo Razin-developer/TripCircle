@@ -1,5 +1,5 @@
 import { api } from "@/services/api";
-import type { Group, GroupDetailResponse, GroupMember, LocationSnapshot, LocationUpdateMode } from "@/types";
+import type { Group, GroupDetailResponse, GroupMember, LocationSnapshot, LocationUpdateMode, UserSearchResult } from "@/types";
 
 export const groupService = {
   async getGroups() {
@@ -31,9 +31,18 @@ export const groupService = {
     const { data } = await api.post<{ group: Group }>(`/groups/${groupId}/stop-sharing`);
     return data.group;
   },
-  async inviteContacts(groupId: string, contacts: Array<{ phoneNumber: string; name?: string }>) {
-    const { data } = await api.post(`/groups/${groupId}/invitations`, { contacts });
+  async inviteUsers(groupId: string, usernames: string[]) {
+    const { data } = await api.post(`/groups/${groupId}/invitations`, { usernames });
     return data;
+  },
+  async searchUsers(groupId: string, query: string) {
+    const { data } = await api.get<{ users: UserSearchResult[] }>("/users/search", {
+      params: {
+        q: query,
+        groupId
+      }
+    });
+    return data.users;
   },
   async postLocation(groupId: string, payload: Record<string, unknown>) {
     const { data } = await api.post(`/groups/${groupId}/location`, payload);

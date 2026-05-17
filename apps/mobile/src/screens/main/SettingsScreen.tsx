@@ -16,6 +16,7 @@ import { useToastStore } from "@/stores/toastStore";
 import { themeNames } from "@/themes/themes";
 import { getLocationPermissionSnapshot } from "@/tasks/backgroundLocationTask";
 import type { ThemeName } from "@/types";
+import { isValidUsername, normalizeUsername, USERNAME_HELPER_TEXT } from "@/utils/username";
 
 export function SettingsScreen(_props: BottomTabScreenProps<MainTabParamList, "Settings">) {
   const theme = useTheme();
@@ -26,7 +27,8 @@ export function SettingsScreen(_props: BottomTabScreenProps<MainTabParamList, "S
   const logout = useAuthStore((state) => state.logout);
   const showToast = useToastStore((state) => state.showToast);
   const [name, setName] = useState(user?.name ?? "");
-  const [deviceName, setDeviceName] = useState(user?.deviceName ?? "");
+  const [phoneNumber, setPhoneNumber] = useState(user?.phoneNumber ?? "");
+  const [username, setUsername] = useState(user?.username ?? "");
   const [permissionLabel, setPermissionLabel] = useState("Checking...");
   const [logLabel, setLogLabel] = useState("Checking...");
   const [saving, setSaving] = useState(false);
@@ -35,7 +37,8 @@ export function SettingsScreen(_props: BottomTabScreenProps<MainTabParamList, "S
 
   useEffect(() => {
     setName(user?.name ?? "");
-    setDeviceName(user?.deviceName ?? "");
+    setPhoneNumber(user?.phoneNumber ?? "");
+    setUsername(user?.username ?? "");
   }, [user]);
 
   useEffect(() => {
@@ -61,11 +64,26 @@ export function SettingsScreen(_props: BottomTabScreenProps<MainTabParamList, "S
   }, []);
 
   const handleSave = async () => {
+    const trimmedName = name.trim();
+    const trimmedPhoneNumber = phoneNumber.trim();
+    const trimmedUsername = normalizeUsername(username);
+
+    if (!trimmedName || !trimmedPhoneNumber || !trimmedUsername) {
+      showToast("Name, phone number, and username are required.");
+      return;
+    }
+
+    if (!isValidUsername(trimmedUsername)) {
+      showToast(USERNAME_HELPER_TEXT);
+      return;
+    }
+
     try {
       setSaving(true);
       const updatedUser = await authService.updateProfile({
-        name,
-        deviceName
+        name: trimmedName,
+        phoneNumber: trimmedPhoneNumber,
+        username: trimmedUsername
       });
       setUser(updatedUser);
       showToast("Settings saved.");
@@ -128,13 +146,20 @@ export function SettingsScreen(_props: BottomTabScreenProps<MainTabParamList, "S
       <ScrollView contentContainerStyle={{ gap: 18, paddingBottom: 30 }} showsVerticalScrollIndicator={false}>
         <View style={{ gap: 8 }}>
           <Text style={{ color: theme.text, fontSize: 32, fontWeight: "800" }}>Settings</Text>
-          <Text style={{ color: theme.subtleText }}>Profile, privacy, themes, and device details.</Text>
+          <Text style={{ color: theme.subtleText }}>Profile, privacy, themes, and account details.</Text>
         </View>
 
         <GlassCard style={{ gap: 16 }}>
           <InputField label="Display Name" value={name} onChangeText={setName} placeholder="Your name" />
-          <InputField label="Device Name" value={deviceName} onChangeText={setDeviceName} placeholder="Your phone name" />
-          <InputField label="Phone Number" value={user?.phoneNumber ?? ""} onChangeText={() => undefined} keyboardType="phone-pad" />
+          <InputField
+            label="Username"
+            value={username}
+            onChangeText={(value) => setUsername(normalizeUsername(value))}
+            placeholder="your_username"
+            autoCapitalize="none"
+          />
+          <Text style={{ color: theme.subtleText, fontSize: 13 }}>{USERNAME_HELPER_TEXT}</Text>
+          <InputField label="Phone Number" value={phoneNumber} onChangeText={setPhoneNumber} keyboardType="phone-pad" />
           <PrimaryButton label="Save Changes" onPress={handleSave} loading={saving} />
         </GlassCard>
 

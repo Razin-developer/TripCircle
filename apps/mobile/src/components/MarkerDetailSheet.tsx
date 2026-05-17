@@ -41,7 +41,7 @@ export function MarkerDetailSheet({
                 {member.user?.name ?? member.phoneNumber}
               </Text>
               <Text style={{ color: theme.subtleText }}>
-                {member.user?.deviceName ?? "Unknown device"}
+                {member.user?.username ? `@${member.user.username}` : "Unknown username"}
               </Text>
             </View>
             <Ionicons name={member.isOnline ? "radio" : "moon-outline"} size={20} color={member.isOnline ? theme.accent : theme.subtleText} />

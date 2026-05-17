@@ -11,18 +11,26 @@ import type { AuthStackParamList } from "@/navigation/types";
 import { authService } from "@/services/authService";
 import { useAuthStore } from "@/stores/authStore";
 import { useToastStore } from "@/stores/toastStore";
+import { isValidUsername, normalizeUsername, USERNAME_HELPER_TEXT } from "@/utils/username";
 
 export function ProfileSetupScreen({ route }: NativeStackScreenProps<AuthStackParamList, "ProfileSetup">) {
   const theme = useTheme();
   const [name, setName] = useState("");
-  const [deviceName, setDeviceName] = useState("");
+  const [username, setUsername] = useState("");
   const [loading, setLoading] = useState(false);
   const setSession = useAuthStore((state) => state.setSession);
   const showToast = useToastStore((state) => state.showToast);
 
   const handleRegister = async () => {
-    if (!name.trim() || !deviceName.trim()) {
-      showToast("Name and device name are both required.");
+    const normalizedUsername = normalizeUsername(username);
+
+    if (!name.trim() || !normalizedUsername) {
+      showToast("Name and username are both required.");
+      return;
+    }
+
+    if (!isValidUsername(normalizedUsername)) {
+      showToast(USERNAME_HELPER_TEXT);
       return;
     }
 
@@ -31,7 +39,7 @@ export function ProfileSetupScreen({ route }: NativeStackScreenProps<AuthStackPa
       const session = await authService.register({
         phoneNumber: route.params.phoneNumber,
         name: name.trim(),
-        deviceName: deviceName.trim()
+        username: normalizedUsername
       });
       setSession(session.token, session.user);
       showToast("Profile ready. You can now join and create groups.");
@@ -48,13 +56,20 @@ export function ProfileSetupScreen({ route }: NativeStackScreenProps<AuthStackPa
         <View style={{ marginTop: 24, gap: 8 }}>
           <Text style={{ color: theme.text, fontSize: 32, fontWeight: "800" }}>Complete your profile</Text>
           <Text style={{ color: theme.subtleText, lineHeight: 22 }}>
-            This helps your family see who is on the road and which phone is sending the location update.
+            Choose the name your family sees everywhere in TripCircle. Your username is unique and always lowercase.
           </Text>
         </View>
 
         <GlassCard style={{ gap: 18 }}>
           <InputField label="Display Name" value={name} onChangeText={setName} placeholder="Razin" />
-          <InputField label="Device Name" value={deviceName} onChangeText={setDeviceName} placeholder="Razin's iPhone" />
+          <InputField
+            label="Username"
+            value={username}
+            onChangeText={(value) => setUsername(normalizeUsername(value))}
+            placeholder="razin"
+            autoCapitalize="none"
+          />
+          <Text style={{ color: theme.subtleText, fontSize: 13 }}>{USERNAME_HELPER_TEXT}</Text>
           <InputField label="Phone Number" value={route.params.phoneNumber} onChangeText={() => undefined} placeholder="" keyboardType="phone-pad" />
           <PrimaryButton label="Create Account" onPress={handleRegister} loading={loading} />
         </GlassCard>

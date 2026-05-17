@@ -6,7 +6,7 @@ export const authService = {
     const { data } = await api.post<SessionResponse>("/auth/login", { phoneNumber });
     return data;
   },
-  async register(payload: { phoneNumber: string; name: string; deviceName: string }) {
+  async register(payload: { phoneNumber: string; name: string; username: string }) {
     const { data } = await api.post<SessionResponse>("/auth/register", payload);
     return data;
   },
@@ -14,7 +14,7 @@ export const authService = {
     const { data } = await api.get<{ user: User }>("/users/me");
     return data.user;
   },
-  async updateProfile(payload: Partial<Pick<User, "name" | "phoneNumber" | "deviceName" | "activeTheme">>) {
+  async updateProfile(payload: Partial<Pick<User, "name" | "phoneNumber" | "username" | "activeTheme">>) {
     const { data } = await api.patch<{ user: User }>("/users/me", payload);
     return data.user;
   },
@@ -22,8 +22,8 @@ export const authService = {
     const { data } = await api.patch<{ user: User }>("/users/me/theme", { activeTheme });
     return data.user;
   },
-  async updateDeviceName(deviceName: string) {
-    const { data } = await api.patch<{ user: User }>("/users/me/device-name", { deviceName });
+  async updateUsername(username: string) {
+    const { data } = await api.patch<{ user: User }>("/users/me/username", { username });
     return data.user;
   }
 };

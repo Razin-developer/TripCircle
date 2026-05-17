@@ -13,5 +13,8 @@
     "start:server": "npm --workspace server run start",
     "lint": "npm --workspace server run lint && npm --workspace @tripcircle/mobile run lint",
     "typecheck": "npm --workspace server run typecheck && npm --workspace @tripcircle/mobile run typecheck"
+  },
+  "dependencies": {
+    "react-native-maps": "1.20.1"
   }
 }

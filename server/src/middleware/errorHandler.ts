@@ -24,6 +24,16 @@ export function errorHandler(error: Error, _request: Request, response: Response
     return response.status(400).json({ message: error.message });
   }
 
+  if (
+    error instanceof mongoose.mongo.MongoServerError &&
+    error.code === 11000
+  ) {
+    const duplicateField = Object.keys(error.keyPattern ?? {})[0] ?? "value";
+    return response.status(409).json({
+      message: `${duplicateField} already exists`
+    });
+  }
+
   console.error(error);
   return response.status(500).json({ message: "Something went wrong" });
 }

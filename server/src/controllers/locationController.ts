@@ -43,7 +43,7 @@ export const postLocation = asyncHandler(async (request, response) => {
         groupId: group._id,
         userId: request.user._id,
         phoneNumber: request.user.phoneNumber,
-        deviceName: request.user.deviceName,
+        username: request.user.username,
         ...body
       }
     },
@@ -62,7 +62,7 @@ export const postLocation = asyncHandler(async (request, response) => {
     groupId: group._id.toString(),
     userId: request.user._id.toString(),
     phoneNumber: request.user.phoneNumber,
-    deviceName: request.user.deviceName,
+    username: request.user.username,
     ...body,
     updatedAt
   };
