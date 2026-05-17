@@ -8,10 +8,8 @@ import '../../services/app_logger.dart';
 import '../../services/socket_service.dart';
 import '../../state/app_controller.dart';
 import '../../utils/format.dart';
-import '../../widgets/empty_state.dart';
 import '../../widgets/glass_card.dart';
 import '../../widgets/primary_button.dart';
-import '../../widgets/screen_shell.dart';
 import '../other/location_permission_screen.dart';
 
 const _defaultLatitude = 20.5937;
@@ -42,6 +40,8 @@ class _GroupMapScreenState extends State<GroupMapScreen> {
 
   GroupDetailResponse? groupDetail;
   bool loading = true;
+  final Set<String> _recentlyUpdatedUserIds = <String>{};
+  final Map<String, Timer> _updateAnimationTimers = <String, Timer>{};
 
   @override
   void initState() {
@@ -228,40 +228,17 @@ class _GroupMapScreenState extends State<GroupMapScreen> {
                   members: locatedMembers,
                   currentUserId: widget.controller.user?.id,
                 ),
-                const SizedBox(height: 16),
-                if (me?.isSharingLocation != true)
-                  GlassCard(
-                    child: Column(
-                      crossAxisAlignment: CrossAxisAlignment.start,
-                      children: [
-                        Text(
-                          'Live sharing is off for you',
-                          style: Theme.of(context).textTheme.titleMedium?.copyWith(fontWeight: FontWeight.w800),
-                        ),
-                        const SizedBox(height: 8),
-                        Text(
-                          'Your family can only see your marker after you explicitly enable live location.',
-                          style: Theme.of(context).textTheme.bodyMedium?.copyWith(color: Theme.of(context).hintColor, height: 1.4),
-                        ),
-                        const SizedBox(height: 14),
-                        PrimaryButton(
-                          label: 'Enable Sharing',
-                          onPressed: () {
-                            Navigator.of(context).push(
-                              MaterialPageRoute(
-                                settings: RouteSettings(name: 'LocationPermissionScreen:${widget.groupId}'),
-                                builder: (_) => LocationPermissionScreen(
-                                  controller: widget.controller,
-                                  groupId: widget.groupId,
-                                  groupName: widget.groupName,
-                                  mode: me?.locationUpdateMode ?? 'balanced',
-                                  replaceWithGroupTabs: false,
-                                ),
-                              ),
-                            ).then((_) => _loadGroup());
-                          },
-                        ),
-                      ],
+                Positioned(
+                  left: 12,
+                  bottom: 10,
+                  child: DecoratedBox(
+                    decoration: BoxDecoration(
+                      color: Colors.white.withValues(alpha: 0.86),
+                      borderRadius: BorderRadius.circular(10),
+                    ),
+                    child: const Padding(
+                      padding: EdgeInsets.symmetric(horizontal: 8, vertical: 4),
+                      child: Text('© OpenStreetMap contributors', style: TextStyle(fontSize: 10, color: Colors.black87)),
                     ),
                   ),
                 const SizedBox(height: 16),
@@ -301,11 +278,167 @@ class _GroupMapScreenState extends State<GroupMapScreen> {
                           ],
                         ),
                       ),
+                      child: const SizedBox(width: 38, height: 38),
                     ),
                   ),
+                DecoratedBox(
+                  decoration: BoxDecoration(
+                    shape: BoxShape.circle,
+                    color: color,
+                    border: Border.all(color: widget.isCurrentUser ? Colors.white : Theme.of(context).cardColor, width: widget.isCurrentUser ? 3 : 2),
+                    boxShadow: const [BoxShadow(color: Color(0x55000000), blurRadius: 12, offset: Offset(0, 4))],
+                  ),
+                  child: SizedBox(
+                    width: 30,
+                    height: 30,
+                    child: Center(
+                      child: widget.isCurrentUser
+                          ? const Icon(Icons.person_pin_circle_rounded, color: Colors.white, size: 18)
+                          : Text(
+                              initialsFromName(widget.member.user?.name ?? widget.member.location?.username ?? 'TC'),
+                              style: const TextStyle(color: Colors.white, fontWeight: FontWeight.w900, fontSize: 11),
+                            ),
+                    ),
+                  ),
+                ),
               ],
-            ],
+            ),
+          );
+        },
+      ),
+    );
+  }
+}
+
+class _CircleMapButton extends StatelessWidget {
+  const _CircleMapButton({required this.icon, required this.onPressed, required this.tooltip});
+
+  final IconData icon;
+  final VoidCallback onPressed;
+  final String tooltip;
+
+  @override
+  Widget build(BuildContext context) {
+    return Material(
+      color: Theme.of(context).cardColor.withValues(alpha: 0.94),
+      shape: const CircleBorder(),
+      elevation: 6,
+      shadowColor: Colors.black26,
+      child: IconButton(icon: Icon(icon), tooltip: tooltip, onPressed: onPressed),
+    );
+  }
+}
+
+class _SharingOffOverlay extends StatelessWidget {
+  const _SharingOffOverlay({required this.onEnable});
+
+  final VoidCallback onEnable;
+
+  @override
+  Widget build(BuildContext context) {
+    return GlassCard(
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        mainAxisSize: MainAxisSize.min,
+        children: [
+          Text('Live sharing is off for you', style: Theme.of(context).textTheme.titleMedium?.copyWith(fontWeight: FontWeight.w800)),
+          const SizedBox(height: 8),
+          Text(
+            'Your family can only see your dot after you explicitly enable live location.',
+            style: Theme.of(context).textTheme.bodyMedium?.copyWith(color: Theme.of(context).hintColor, height: 1.4),
           ),
+          const SizedBox(height: 14),
+          PrimaryButton(label: 'Enable Sharing', onPressed: onEnable),
+        ],
+      ),
+    );
+  }
+}
+
+class _NoLocationsOverlay extends StatelessWidget {
+  const _NoLocationsOverlay();
+
+  @override
+  Widget build(BuildContext context) {
+    return GlassCard(
+      child: Row(
+        children: [
+          Icon(Icons.location_off_rounded, color: Theme.of(context).hintColor),
+          const SizedBox(width: 12),
+          Expanded(
+            child: Text(
+              'No valid live locations yet. Accepted travellers appear as dots after sharing starts.',
+              style: Theme.of(context).textTheme.bodyMedium?.copyWith(color: Theme.of(context).hintColor),
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+}
+
+class _MapLoadingView extends StatelessWidget {
+  const _MapLoadingView();
+
+  @override
+  Widget build(BuildContext context) {
+    return const ColoredBox(
+      color: Color(0xFFE8EEF7),
+      child: Center(child: CircularProgressIndicator()),
+    );
+  }
+}
+
+class _MemberLocationSheet extends StatelessWidget {
+  const _MemberLocationSheet({required this.member});
+
+  final GroupMember member;
+
+  @override
+  Widget build(BuildContext context) {
+    final theme = Theme.of(context);
+    final location = member.location!;
+    final color = _parseColor(member.user?.avatarColor) ?? theme.colorScheme.primary;
+    final place = location.nearbyPlaceName.isNotEmpty ? location.nearbyPlaceName : 'Unknown area';
+
+    return SafeArea(
+      top: false,
+      child: SingleChildScrollView(
+        padding: const EdgeInsets.fromLTRB(20, 0, 20, 24),
+        child: Column(
+          mainAxisSize: MainAxisSize.min,
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            Row(
+              children: [
+                CircleAvatar(
+                  backgroundColor: color,
+                  child: Text(initialsFromName(member.user?.name ?? location.username), style: const TextStyle(color: Colors.white, fontWeight: FontWeight.w900)),
+                ),
+                const SizedBox(width: 12),
+                Expanded(
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      Text(member.user?.name ?? member.phoneNumber, style: theme.textTheme.titleLarge?.copyWith(fontWeight: FontWeight.w900)),
+                      Text('@${member.user?.username ?? location.username}', style: theme.textTheme.bodyMedium?.copyWith(color: theme.hintColor)),
+                    ],
+                  ),
+                ),
+                Chip(
+                  avatar: Icon(Icons.circle, size: 10, color: member.isOnline ? Colors.green : theme.hintColor),
+                  label: Text(member.isOnline ? 'Online' : 'Offline'),
+                ),
+              ],
+            ),
+            const SizedBox(height: 18),
+            _LocationDetailRow(icon: Icons.place_rounded, label: place, value: '${location.state.isEmpty ? 'State unavailable' : location.state} • ${location.country.isEmpty ? 'Country unavailable' : location.country}'),
+            _LocationDetailRow(icon: Icons.explore_rounded, label: 'Coordinates', value: '${location.latitude.toStringAsFixed(5)}, ${location.longitude.toStringAsFixed(5)}'),
+            _LocationDetailRow(icon: Icons.schedule_rounded, label: 'Last updated', value: formatRelativeTime(location.updatedAt.isNotEmpty ? location.updatedAt : member.lastSeenAt)),
+            if (location.accuracy != null) _LocationDetailRow(icon: Icons.gps_fixed_rounded, label: 'Accuracy', value: '${location.accuracy!.toStringAsFixed(0)} m'),
+            if (location.speed != null) _LocationDetailRow(icon: Icons.speed_rounded, label: 'Speed', value: '${location.speed!.toStringAsFixed(1)} m/s'),
+            if (location.batteryLevel != null) _LocationDetailRow(icon: Icons.battery_full_rounded, label: 'Battery', value: '${location.batteryLevel!.toStringAsFixed(0)}%'),
+          ],
         ),
       ),
     );
