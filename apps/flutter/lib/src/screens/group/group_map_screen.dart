@@ -253,8 +253,20 @@ class _GroupMapScreenState extends State<GroupMapScreen> {
 
     return Scaffold(
       appBar: AppBar(
-        title: Text(widget.groupName),
-        subtitle: const Text('Live trip view'),
+  title: Column(
+    crossAxisAlignment: CrossAxisAlignment.start,
+    mainAxisSize: MainAxisSize.min,
+    children: [
+      Text(widget.groupName),
+      Text(
+        'Live trip view',
+        style: Theme.of(context).textTheme.bodySmall?.copyWith(
+              color: Theme.of(context).hintColor,
+            ),
+      ),
+    ],
+  ),
+),
       ),
       body: RefreshIndicator(
         onRefresh: _loadGroup,
