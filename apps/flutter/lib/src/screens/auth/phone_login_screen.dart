@@ -39,6 +39,7 @@ class _PhoneLoginScreenState extends State<PhoneLoginScreen> {
   Widget build(BuildContext context) {
     return Scaffold(
       body: ScreenShell(
+        screenName: 'PhoneLoginScreen',
         title: 'Sign in with your number',
         subtitle: 'For this starter build we use a mock OTP style flow, so your phone number is your main identity key.',
         child: ListView(

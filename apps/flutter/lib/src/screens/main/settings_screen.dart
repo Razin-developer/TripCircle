@@ -53,6 +53,7 @@ class _SettingsScreenState extends State<SettingsScreen> {
     final user = widget.controller.user!;
 
     return ScreenShell(
+      screenName: 'SettingsScreen',
       title: 'Settings',
       subtitle: 'Profile, unique username, and themes.',
       child: ListView(

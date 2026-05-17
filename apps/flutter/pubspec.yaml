@@ -1,5 +1,5 @@
-name: tripcircle_flutter
-description: "A new Flutter project."
+name: tripcircle
+description: 'TripCircle Flutter app.'
 # The following line prevents the package from being accidentally published to
 # pub.dev using `flutter pub publish`. This is preferred for private packages.
 publish_to: 'none' # Remove this line if you wish to publish to pub.dev
@@ -33,21 +33,33 @@ dependencies:
 
   cupertino_icons: ^1.0.8
   http: ^1.5.0
+  path_provider: ^2.1.5
 
 dev_dependencies:
   flutter_test:
     sdk: flutter
 
-  # The "flutter_lints" package below contains a set of recommended lints to
-  # encourage good coding practices. The lint set provided by the package is
-  # activated in the `analysis_options.yaml` file located at the root of your
-  # package. See that file for information about deactivating specific lint
-  # rules and activating additional ones.
   flutter_lints: ^6.0.0
+  flutter_launcher_icons: ^0.14.4
 
-# For information on the generic Dart part of this file, see the
-# following page: https://dart.dev/tools/pub/pubspec
-
-# The following section is specific to Flutter packages.
 flutter:
   uses-material-design: true
+
+flutter_launcher_icons:
+  android: true
+  ios: true
+  image_path: 'assets/branding/tripcircle-icon.png'
+  min_sdk_android: 21
+  remove_alpha_ios: true
+  web:
+    generate: true
+    image_path: 'assets/branding/tripcircle-icon.png'
+    background_color: '#F6F7FB'
+    theme_color: '#4E7BFF'
+  windows:
+    generate: true
+    image_path: 'assets/branding/tripcircle-icon.png'
+    icon_size: 256
+  macos:
+    generate: true
+    image_path: 'assets/branding/tripcircle-icon.png'

@@ -40,6 +40,11 @@ class _LocationPermissionScreenState extends State<LocationPermissionScreen> {
   Widget build(BuildContext context) {
     return Scaffold(
       body: ScreenShell(
+        screenName: 'LocationPermissionScreen',
+        logData: {
+          'groupId': widget.groupId,
+          'groupName': widget.groupName,
+        },
         title: 'Turn on live location',
         subtitle: 'Sharing starts only after you accept a group invite and grant both foreground and background location access.',
         child: ListView(
@@ -105,6 +110,7 @@ class _LocationPermissionScreenState extends State<LocationPermissionScreen> {
                 if (widget.replaceWithGroupTabs) {
                   Navigator.of(context).pushReplacement(
                     MaterialPageRoute(
+                      settings: RouteSettings(name: 'GroupTabsScreen:${widget.groupId}'),
                       builder: (_) => GroupTabsScreen(
                         controller: widget.controller,
                         groupId: widget.groupId,

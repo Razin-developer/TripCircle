@@ -45,6 +45,7 @@ class _ProfileSetupScreenState extends State<ProfileSetupScreen> {
   Widget build(BuildContext context) {
     return Scaffold(
       body: ScreenShell(
+        screenName: 'ProfileSetupScreen',
         title: 'Complete your profile',
         subtitle: 'Pick the unique lowercase username that TripCircle will show everywhere.',
         child: ListView(

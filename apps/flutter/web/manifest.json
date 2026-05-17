@@ -1,11 +1,11 @@
 {
-    "name": "tripcircle_flutter",
-    "short_name": "tripcircle_flutter",
+    "name": "TripCircle",
+    "short_name": "TripCircle",
     "start_url": ".",
     "display": "standalone",
-    "background_color": "#0175C2",
-    "theme_color": "#0175C2",
-    "description": "A new Flutter project.",
+    "background_color": "#F6F7FB",
+    "theme_color": "#4E7BFF",
+    "description": "TripCircle Flutter app.",
     "orientation": "portrait-primary",
     "prefer_related_applications": false,
     "icons": [

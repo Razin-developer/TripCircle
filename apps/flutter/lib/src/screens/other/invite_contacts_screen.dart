@@ -65,6 +65,11 @@ class _InviteContactsScreenState extends State<InviteContactsScreen> {
   Widget build(BuildContext context) {
     return Scaffold(
       body: ScreenShell(
+        screenName: 'InviteContactsScreen',
+        logData: {
+          'groupId': widget.groupId,
+          'groupName': widget.groupName,
+        },
         title: 'Add Members',
         subtitle: 'Search only by username. Each letter checks the backend and shows the top five matches.',
         child: ListView(
@@ -181,6 +186,7 @@ class _InviteContactsScreenState extends State<InviteContactsScreen> {
                 if (widget.controller.errorMessage == null) {
                   navigator.pushReplacement(
                     MaterialPageRoute(
+                      settings: RouteSettings(name: 'GroupTabsScreen:${widget.groupId}'),
                       builder: (_) => GroupTabsScreen(
                         controller: widget.controller,
                         groupId: widget.groupId,
@@ -197,6 +203,7 @@ class _InviteContactsScreenState extends State<InviteContactsScreen> {
               onPressed: () {
                 Navigator.of(context).pushReplacement(
                   MaterialPageRoute(
+                    settings: RouteSettings(name: 'GroupTabsScreen:${widget.groupId}'),
                     builder: (_) => GroupTabsScreen(
                       controller: widget.controller,
                       groupId: widget.groupId,

@@ -1,22 +1,28 @@
 import 'package:flutter/material.dart';
 
+import 'logged_screen.dart';
+
 class ScreenShell extends StatelessWidget {
   const ScreenShell({
     super.key,
     required this.child,
     this.title,
     this.subtitle,
+    this.screenName,
+    this.logData,
   });
 
   final Widget child;
   final String? title;
   final String? subtitle;
+  final String? screenName;
+  final Map<String, dynamic>? logData;
 
   @override
   Widget build(BuildContext context) {
     final theme = Theme.of(context);
 
-    return SafeArea(
+    final content = SafeArea(
       child: Padding(
         padding: const EdgeInsets.all(20),
         child: Column(
@@ -40,6 +46,16 @@ class ScreenShell extends StatelessWidget {
           ],
         ),
       ),
+    );
+
+    if (screenName == null) {
+      return content;
+    }
+
+    return LoggedScreen(
+      screenName: screenName!,
+      data: logData,
+      child: content,
     );
   }
 }

@@ -16,6 +16,7 @@ class InboxScreen extends StatelessWidget {
     final invitations = controller.invitations;
 
     return ScreenShell(
+      screenName: 'InboxScreen',
       title: 'Inbox',
       subtitle: 'Accept or decline family trip invitations in real time.',
       child: RefreshIndicator(
@@ -41,6 +42,7 @@ class InboxScreen extends StatelessWidget {
 
                     Navigator.of(context).push(
                       MaterialPageRoute(
+                        settings: RouteSettings(name: 'LocationPermissionScreen:${invitation.groupId}'),
                         builder: (_) => LocationPermissionScreen(
                           controller: controller,
                           groupId: invitation.groupId,

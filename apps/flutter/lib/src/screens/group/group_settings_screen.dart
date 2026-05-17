@@ -66,6 +66,11 @@ class _GroupSettingsScreenState extends State<GroupSettingsScreen> {
 
     return Scaffold(
       body: ScreenShell(
+        screenName: 'GroupSettingsScreen',
+        logData: {
+          'groupId': widget.groupId,
+          'groupName': widget.groupName,
+        },
         title: 'Group Settings',
         subtitle: 'Control invites, naming, and location sharing for this trip.',
         child: RefreshIndicator(
@@ -101,6 +106,7 @@ class _GroupSettingsScreenState extends State<GroupSettingsScreen> {
                         onPressed: () {
                           Navigator.of(context).push(
                             MaterialPageRoute(
+                              settings: RouteSettings(name: 'InviteContactsScreen:${widget.groupId}'),
                               builder: (_) => InviteContactsScreen(
                                 controller: widget.controller,
                                 groupId: widget.groupId,
@@ -178,6 +184,7 @@ class _GroupSettingsScreenState extends State<GroupSettingsScreen> {
                         onPressed: () {
                           Navigator.of(context).push(
                             MaterialPageRoute(
+                              settings: RouteSettings(name: 'LocationPermissionScreen:${widget.groupId}'),
                               builder: (_) => LocationPermissionScreen(
                                 controller: widget.controller,
                                 groupId: widget.groupId,

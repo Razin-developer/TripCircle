@@ -1,3 +1,5 @@
+import 'dart:async';
+
 import 'package:flutter/material.dart';
 
 import 'screens/auth/welcome_screen.dart';
@@ -6,6 +8,8 @@ import 'screens/auth/profile_setup_screen.dart';
 import 'screens/main/dashboard_screen.dart';
 import 'screens/main/inbox_screen.dart';
 import 'screens/main/settings_screen.dart';
+import 'services/app_logger.dart';
+import 'services/route_logger.dart';
 import 'state/app_controller.dart';
 import 'theme/app_theme.dart';
 
@@ -22,11 +26,13 @@ class TripCircleApp extends StatefulWidget {
 
 class _TripCircleAppState extends State<TripCircleApp> {
   late final AppController controller;
+  final AppRouteObserver routeObserver = AppRouteObserver();
 
   @override
   void initState() {
     super.initState();
     controller = AppController();
+    unawaited(AppLogger.instance.info('app', 'TripCircle app started'));
   }
 
   @override
@@ -46,6 +52,7 @@ class _TripCircleAppState extends State<TripCircleApp> {
           title: 'TripCircle',
           debugShowCheckedModeBanner: false,
           theme: buildThemeData(palette),
+          navigatorObservers: [routeObserver],
           home: _AppGate(controller: controller),
         );
       },
@@ -84,6 +91,7 @@ class _AppGateState extends State<_AppGate> {
       if (!showPhoneLogin) {
         return WelcomeScreen(
           onGetStarted: () {
+            unawaited(AppLogger.instance.routeEvent('state-change', 'PhoneLogin', data: {'source': 'Welcome'}));
             setState(() {
               showPhoneLogin = true;
             });
@@ -94,6 +102,7 @@ class _AppGateState extends State<_AppGate> {
       return PhoneLoginScreen(
         controller: controller,
         onBack: () {
+          unawaited(AppLogger.instance.routeEvent('state-change', 'Welcome', data: {'source': 'PhoneLogin'}));
           setState(() {
             showPhoneLogin = false;
           });
@@ -117,6 +126,12 @@ class _AppGateState extends State<_AppGate> {
           NavigationDestination(icon: Icon(Icons.settings_outlined), selectedIcon: Icon(Icons.settings), label: 'Settings'),
         ],
         onDestinationSelected: (index) {
+          final destination = index == 0
+              ? 'Dashboard'
+              : index == 1
+                  ? 'Inbox'
+                  : 'Settings';
+          unawaited(AppLogger.instance.routeEvent('tab-selected', destination));
           setState(() {
             currentTab = index;
           });

@@ -18,6 +18,7 @@ class WelcomeScreen extends StatelessWidget {
 
     return Scaffold(
       body: ScreenShell(
+        screenName: 'WelcomeScreen',
         child: Column(
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [

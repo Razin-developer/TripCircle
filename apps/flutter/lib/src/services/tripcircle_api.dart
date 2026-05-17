@@ -1,9 +1,12 @@
+import 'dart:async';
 import 'dart:convert';
+import 'dart:io';
 
 import 'package:http/http.dart' as http;
 
 import '../config/app_config.dart';
 import '../models/app_models.dart';
+import 'app_logger.dart';
 
 class TripCircleApiException implements Exception {
   const TripCircleApiException(this.message, {this.statusCode});
@@ -31,6 +34,7 @@ class TripCircleApi {
     Map<String, dynamic>? body,
     Map<String, String>? queryParameters,
   }) async {
+    final stopwatch = Stopwatch()..start();
     final headers = <String, String>{
       'Content-Type': 'application/json',
       if (token != null && token.isNotEmpty) 'Authorization': 'Bearer $token',
@@ -40,31 +44,107 @@ class TripCircleApi {
     final uri = _uri(path, queryParameters);
     final payload = body == null ? null : jsonEncode(body);
 
-    switch (method) {
-      case 'GET':
-        response = await _client.get(uri, headers: headers);
-        break;
-      case 'POST':
-        response = await _client.post(uri, headers: headers, body: payload);
-        break;
-      case 'PATCH':
-        response = await _client.patch(uri, headers: headers, body: payload);
-        break;
-      case 'DELETE':
-        response = await _client.delete(uri, headers: headers);
-        break;
-      default:
-        throw const TripCircleApiException('Unsupported request method.');
+    await AppLogger.instance.info(
+      'http',
+      'HTTP request started',
+      data: {
+        'method': method,
+        'url': uri.toString(),
+        'queryParameters': queryParameters,
+        'body': body,
+      },
+    );
+
+    try {
+      switch (method) {
+        case 'GET':
+          response = await _client.get(uri, headers: headers).timeout(const Duration(seconds: 60));
+          break;
+        case 'POST':
+          response = await _client.post(uri, headers: headers, body: payload).timeout(const Duration(seconds: 60));
+          break;
+        case 'PATCH':
+          response = await _client.patch(uri, headers: headers, body: payload).timeout(const Duration(seconds: 60));
+          break;
+        case 'DELETE':
+          response = await _client.delete(uri, headers: headers).timeout(const Duration(seconds: 60));
+          break;
+        default:
+          throw const TripCircleApiException('Unsupported request method.');
+      }
+    } on TimeoutException catch (error) {
+      await AppLogger.instance.error(
+        'http',
+        'HTTP request timed out',
+        data: {
+          'method': method,
+          'url': uri.toString(),
+          'durationMs': stopwatch.elapsedMilliseconds,
+          'message': error.message,
+        },
+      );
+      throw const TripCircleApiException('Request timed out. Please check your internet and try again.');
+    } on SocketException catch (error) {
+      await AppLogger.instance.error(
+        'http',
+        'HTTP network failure',
+        data: {
+          'method': method,
+          'url': uri.toString(),
+          'durationMs': stopwatch.elapsedMilliseconds,
+          'message': error.message,
+        },
+      );
+      throw const TripCircleApiException('Network error. Please check your internet connection.');
     }
 
-    final decoded = response.body.isEmpty ? <String, dynamic>{} : jsonDecode(response.body) as Map<String, dynamic>;
+    Map<String, dynamic> decoded;
+    try {
+      decoded = response.body.isEmpty ? <String, dynamic>{} : jsonDecode(response.body) as Map<String, dynamic>;
+    } on FormatException {
+      await AppLogger.instance.error(
+        'http',
+        'HTTP response JSON decode failed',
+        data: {
+          'method': method,
+          'url': uri.toString(),
+          'statusCode': response.statusCode,
+          'durationMs': stopwatch.elapsedMilliseconds,
+          'responseBody': response.body,
+        },
+      );
+      throw const TripCircleApiException('Server returned an invalid response.');
+    }
 
     if (response.statusCode >= 400) {
+      await AppLogger.instance.warning(
+        'http',
+        'HTTP request failed',
+        data: {
+          'method': method,
+          'url': uri.toString(),
+          'statusCode': response.statusCode,
+          'durationMs': stopwatch.elapsedMilliseconds,
+          'response': decoded,
+        },
+      );
       throw TripCircleApiException(
         decoded['message'] as String? ?? 'Request failed.',
         statusCode: response.statusCode,
       );
     }
+
+    await AppLogger.instance.info(
+      'http',
+      'HTTP request completed',
+      data: {
+        'method': method,
+        'url': uri.toString(),
+        'statusCode': response.statusCode,
+        'durationMs': stopwatch.elapsedMilliseconds,
+        'response': decoded,
+      },
+    );
 
     return decoded;
   }

@@ -35,12 +35,14 @@ class _DashboardScreenState extends State<DashboardScreen> {
         onPressed: () {
           Navigator.of(context).push(
             MaterialPageRoute(
+              settings: const RouteSettings(name: 'CreateGroupScreen'),
               builder: (_) => CreateGroupScreen(controller: widget.controller),
             ),
           );
         },
       ),
       body: ScreenShell(
+        screenName: 'DashboardScreen',
         title: 'Dashboard',
         subtitle: 'Your live travel circles and active family trips.',
         child: RefreshIndicator(
@@ -60,6 +62,7 @@ class _DashboardScreenState extends State<DashboardScreen> {
                     onOpen: () {
                       Navigator.of(context).push(
                         MaterialPageRoute(
+                          settings: RouteSettings(name: 'GroupTabsScreen:${group.id}'),
                           builder: (_) => GroupTabsScreen(
                             controller: widget.controller,
                             groupId: group.id,

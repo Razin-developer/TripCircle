@@ -60,6 +60,11 @@ class _GroupMapScreenState extends State<GroupMapScreen> {
 
     return Scaffold(
       body: ScreenShell(
+        screenName: 'GroupMapScreen',
+        logData: {
+          'groupId': widget.groupId,
+          'groupName': widget.groupName,
+        },
         title: widget.groupName,
         subtitle: 'Live trip view for your accepted members.',
         child: RefreshIndicator(
@@ -111,6 +116,7 @@ class _GroupMapScreenState extends State<GroupMapScreen> {
                           onPressed: () {
                             Navigator.of(context).push(
                               MaterialPageRoute(
+                                settings: RouteSettings(name: 'LocationPermissionScreen:${widget.groupId}'),
                                 builder: (_) => LocationPermissionScreen(
                                   controller: widget.controller,
                                   groupId: widget.groupId,

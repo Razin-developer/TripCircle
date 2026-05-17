@@ -38,6 +38,7 @@ class _CreateGroupScreenState extends State<CreateGroupScreen> {
   Widget build(BuildContext context) {
     return Scaffold(
       body: ScreenShell(
+        screenName: 'CreateGroupScreen',
         title: 'Create Group',
         child: ListView(
           children: [
@@ -69,6 +70,7 @@ class _CreateGroupScreenState extends State<CreateGroupScreen> {
 
                       Navigator.of(context).pushReplacement(
                         MaterialPageRoute(
+                          settings: RouteSettings(name: 'InviteContactsScreen:${group.id}'),
                           builder: (_) => InviteContactsScreen(
                             controller: widget.controller,
                             groupId: group.id,

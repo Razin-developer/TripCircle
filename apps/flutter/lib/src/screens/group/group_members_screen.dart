@@ -51,6 +51,11 @@ class _GroupMembersScreenState extends State<GroupMembersScreen> {
 
     return Scaffold(
       body: ScreenShell(
+        screenName: 'GroupMembersScreen',
+        logData: {
+          'groupId': widget.groupId,
+          'groupName': widget.groupName,
+        },
         title: 'Members',
         subtitle: 'Everyone currently in the trip circle and their status.',
         child: RefreshIndicator(

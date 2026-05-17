@@ -1,6 +1,9 @@
+import 'dart:async';
+
 import 'package:flutter/material.dart';
 
 import '../models/app_models.dart';
+import '../services/app_logger.dart';
 import '../services/tripcircle_api.dart';
 
 class AppController extends ChangeNotifier {
@@ -19,6 +22,13 @@ class AppController extends ChangeNotifier {
   bool get isAuthenticated => token != null && user != null;
 
   Future<void> login(String phoneNumber) async {
+    unawaited(
+      AppLogger.instance.info(
+        'auth',
+        'Login started',
+        data: {'phoneNumber': phoneNumber.trim()},
+      ),
+    );
     await _run(() async {
       try {
         final session = await _api.login(phoneNumber.trim());
@@ -26,11 +36,21 @@ class AppController extends ChangeNotifier {
         user = session.user;
         pendingPhoneNumber = null;
         await refreshHomeData();
+        await AppLogger.instance.info(
+          'auth',
+          'Login succeeded',
+          data: {'userId': user?.id, 'username': user?.username},
+        );
       } on TripCircleApiException catch (error) {
         if (error.statusCode == 404 || error.message.contains('User not found')) {
           pendingPhoneNumber = phoneNumber.trim();
           errorMessage = null;
           notifyListeners();
+          await AppLogger.instance.info(
+            'auth',
+            'Login redirected to profile setup',
+            data: {'phoneNumber': phoneNumber.trim()},
+          );
           return;
         }
 
@@ -44,6 +64,13 @@ class AppController extends ChangeNotifier {
     required String name,
     required String username,
   }) async {
+    unawaited(
+      AppLogger.instance.info(
+        'auth',
+        'Register started',
+        data: {'phoneNumber': phoneNumber.trim(), 'username': username.trim().toLowerCase()},
+      ),
+    );
     await _run(() async {
       final session = await _api.register(
         phoneNumber: phoneNumber.trim(),
@@ -54,6 +81,11 @@ class AppController extends ChangeNotifier {
       user = session.user;
       pendingPhoneNumber = null;
       await refreshHomeData();
+      await AppLogger.instance.info(
+        'auth',
+        'Register succeeded',
+        data: {'userId': user?.id, 'username': user?.username},
+      );
     });
   }
 
@@ -261,6 +293,13 @@ class AppController extends ChangeNotifier {
   }
 
   void logout() {
+    unawaited(
+      AppLogger.instance.info(
+        'auth',
+        'Logout',
+        data: {'userId': user?.id, 'username': user?.username},
+      ),
+    );
     token = null;
     user = null;
     pendingPhoneNumber = null;
@@ -279,9 +318,19 @@ class AppController extends ChangeNotifier {
       await action();
     } on TripCircleApiException catch (error) {
       errorMessage = error.message;
+      await AppLogger.instance.error(
+        'controller',
+        'Action failed with API error',
+        data: {'message': error.message, 'statusCode': error.statusCode},
+      );
       notifyListeners();
-    } catch (_) {
+    } catch (error) {
       errorMessage = 'Something went wrong.';
+      await AppLogger.instance.error(
+        'controller',
+        'Action failed with unexpected error',
+        data: {'error': error.toString()},
+      );
       notifyListeners();
     } finally {
       isBusy = false;
