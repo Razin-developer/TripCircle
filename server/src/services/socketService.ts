@@ -7,13 +7,17 @@ export function setSocketServer(io: Server) {
 }
 
 export function getSocketServer() {
+  if (!ioInstance) {
+    throw new Error("Socket server has not been initialized");
+  }
+
   return ioInstance;
 }
 
 export function emitToUser(userId: string, event: string, payload: unknown) {
-  getSocketServer()?.to(`user:${userId}`).emit(event, payload);
+  getSocketServer().to(`user:${userId}`).emit(event, payload);
 }
 
 export function emitToGroup(groupId: string, event: string, payload: unknown) {
-  getSocketServer()?.to(`group:${groupId}`).emit(event, payload);
+  getSocketServer().to(`group:${groupId}`).emit(event, payload);
 }
