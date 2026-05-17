@@ -44,7 +44,8 @@ export const getInvitations = asyncHandler(async (request, response) => {
 });
 
 export const createInvitations = asyncHandler(async (request, response) => {
-  const groupId = request.params.groupId as string;
+  const { body, params } = request.validated as z.infer<typeof createInvitationSchema>;
+  const { groupId } = params;
   const group = await Group.findById(groupId);
 
   if (!group) {
@@ -57,7 +58,7 @@ export const createInvitations = asyncHandler(async (request, response) => {
 
   const createdInvitations = [];
 
-  for (const contact of request.body.contacts) {
+  for (const contact of body.contacts) {
     const phoneNumber = normalizePhoneNumber(contact.phoneNumber);
     const alreadyExists = group.members.some((member) => member.phoneNumber === phoneNumber);
 
@@ -165,8 +166,9 @@ async function updateInvitationStatus(
 }
 
 export const acceptInvitation = asyncHandler(async (request, response) => {
+  const { params } = request.validated as z.infer<typeof invitationActionSchema>;
   const invitation = await updateInvitationStatus(
-    request.params.invitationId as string,
+    params.invitationId,
     {
       _id: request.user._id.toString(),
       phoneNumber: request.user.phoneNumber
@@ -177,8 +179,9 @@ export const acceptInvitation = asyncHandler(async (request, response) => {
 });
 
 export const declineInvitation = asyncHandler(async (request, response) => {
+  const { params } = request.validated as z.infer<typeof invitationActionSchema>;
   const invitation = await updateInvitationStatus(
-    request.params.invitationId as string,
+    params.invitationId,
     {
       _id: request.user._id.toString(),
       phoneNumber: request.user.phoneNumber

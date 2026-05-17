@@ -1,18 +1,21 @@
 import { useEffect } from "react";
 import { ActivityIndicator, View } from "react-native";
-import { NavigationContainer, DefaultTheme as NavigationDefaultTheme } from "@react-navigation/native";
+import { NavigationContainer, DefaultTheme as NavigationDefaultTheme, createNavigationContainerRef } from "@react-navigation/native";
 import { StatusBar } from "expo-status-bar";
 
 import "@/tasks/backgroundLocationTask";
 
 import { RootNavigator } from "@/navigation/RootNavigator";
 import { invitationService } from "@/services/invitationService";
+import { logger } from "@/services/logger";
 import { socketService } from "@/services/socket";
 import { useTheme } from "@/hooks/useTheme";
 import { useAuthStore } from "@/stores/authStore";
 import { useInvitationStore } from "@/stores/invitationStore";
 import { ToastHost } from "@/components/ToastHost";
 import { useToastStore } from "@/stores/toastStore";
+
+const navigationRef = createNavigationContainerRef<any>();
 
 export default function App() {
   const theme = useTheme();
@@ -23,12 +26,18 @@ export default function App() {
   const showToast = useToastStore((state) => state.showToast);
 
   useEffect(() => {
+    void logger.log("info", "app", "TripCircle app booted");
+  }, []);
+
+  useEffect(() => {
     if (!token) {
+      void logger.log("info", "auth", "No auth token found, user is logged out");
       socketService.disconnect();
       useInvitationStore.getState().setInvitations([]);
       return;
     }
 
+    void logger.log("info", "auth", "Auth token restored, starting authenticated services");
     invitationService.getInvitations().then(setInvitations).catch(() => null);
     const socket = socketService.connect(token);
     socketService.joinUser();
@@ -78,6 +87,15 @@ export default function App() {
           text: theme.text,
           border: theme.border
         }
+      }}
+      ref={navigationRef}
+      onReady={() => {
+        const route = navigationRef.getCurrentRoute() as { name?: string; params?: unknown } | undefined;
+        logger.setRouteContext(route?.name, route?.params);
+      }}
+      onStateChange={() => {
+        const route = navigationRef.getCurrentRoute() as { name?: string; params?: unknown } | undefined;
+        logger.setRouteContext(route?.name, route?.params);
       }}
     >
       <StatusBar style={theme.background === "#0E1320" ? "light" : "dark"} />

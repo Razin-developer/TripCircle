@@ -35,7 +35,8 @@ export const getMe = asyncHandler(async (request, response) => {
 });
 
 export const updateMe = asyncHandler(async (request, response) => {
-  const { name, phoneNumber, deviceName, activeTheme } = request.body as z.infer<typeof updateUserSchema>["body"];
+  const { body } = request.validated as z.infer<typeof updateUserSchema>;
+  const { name, phoneNumber, deviceName, activeTheme } = body;
 
   if (name) {
     request.user.name = name;
@@ -58,13 +59,15 @@ export const updateMe = asyncHandler(async (request, response) => {
 });
 
 export const updateTheme = asyncHandler(async (request, response) => {
-  request.user.activeTheme = request.body.activeTheme;
+  const { body } = request.validated as z.infer<typeof updateThemeSchema>;
+  request.user.activeTheme = body.activeTheme;
   await request.user.save();
   response.json({ user: request.user });
 });
 
 export const updateDeviceName = asyncHandler(async (request, response) => {
-  request.user.deviceName = request.body.deviceName;
+  const { body } = request.validated as z.infer<typeof updateDeviceSchema>;
+  request.user.deviceName = body.deviceName;
   await request.user.save();
   response.json({ user: request.user });
 });

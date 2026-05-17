@@ -37,8 +37,10 @@ export const updateGroupSchema = z.object({
 });
 
 export const createGroup = asyncHandler(async (request, response) => {
+  const { body } = request.validated as z.infer<typeof createGroupSchema>;
+
   const group = await Group.create({
-    name: request.body.name,
+    name: body.name,
     hostUserId: request.user._id,
     inviteCode: generateInviteCode(),
     members: [
@@ -77,7 +79,8 @@ export const getGroups = asyncHandler(async (request, response) => {
 });
 
 export const getGroup = asyncHandler(async (request, response) => {
-  const groupId = request.params.groupId as string;
+  const { params } = request.validated as z.infer<typeof groupIdSchema>;
+  const { groupId } = params;
   const { group } = await getGroupForAcceptedMember(groupId, request.user._id.toString());
 
   response.json({
@@ -87,9 +90,10 @@ export const getGroup = asyncHandler(async (request, response) => {
 });
 
 export const updateGroup = asyncHandler(async (request, response) => {
-  const groupId = request.params.groupId as string;
+  const { body, params } = request.validated as z.infer<typeof updateGroupSchema>;
+  const { groupId } = params;
   const { group, member } = await getGroupForAcceptedMember(groupId, request.user._id.toString());
-  const { name, locationUpdateMode, isSharingLocation } = request.body as z.infer<typeof updateGroupSchema>["body"];
+  const { name, locationUpdateMode, isSharingLocation } = body;
   const isHost = group.hostUserId.toString() === request.user._id.toString();
 
   if (name) {
@@ -116,7 +120,8 @@ export const updateGroup = asyncHandler(async (request, response) => {
 });
 
 export const deleteGroup = asyncHandler(async (request, response) => {
-  const groupId = request.params.groupId as string;
+  const { params } = request.validated as z.infer<typeof groupIdSchema>;
+  const { groupId } = params;
   const { group } = await getGroupForAcceptedMember(groupId, request.user._id.toString());
 
   if (group.hostUserId.toString() !== request.user._id.toString()) {
@@ -133,7 +138,8 @@ export const deleteGroup = asyncHandler(async (request, response) => {
 });
 
 export const leaveGroup = asyncHandler(async (request, response) => {
-  const groupId = request.params.groupId as string;
+  const { params } = request.validated as z.infer<typeof groupIdSchema>;
+  const { groupId } = params;
   const { group, member } = await getGroupForAnyMember(groupId, request.user._id.toString());
 
   if (member.role === "host") {
@@ -154,7 +160,8 @@ export const leaveGroup = asyncHandler(async (request, response) => {
 });
 
 export const stopSharing = asyncHandler(async (request, response) => {
-  const groupId = request.params.groupId as string;
+  const { params } = request.validated as z.infer<typeof groupIdSchema>;
+  const { groupId } = params;
   const { group, member } = await getGroupForAcceptedMember(groupId, request.user._id.toString());
 
   member.isSharingLocation = false;
@@ -167,7 +174,8 @@ export const stopSharing = asyncHandler(async (request, response) => {
 });
 
 export const getLatestLocations = asyncHandler(async (request, response) => {
-  const groupId = request.params.groupId as string;
+  const { params } = request.validated as z.infer<typeof groupIdSchema>;
+  const { groupId } = params;
   const { group } = await getGroupForAcceptedMember(groupId, request.user._id.toString());
   const acceptedUserIds = group.members
     .filter((member) => member.status === "accepted" && member.userId)
@@ -181,7 +189,8 @@ export const getLatestLocations = asyncHandler(async (request, response) => {
 });
 
 export const getMembers = asyncHandler(async (request, response) => {
-  const groupId = request.params.groupId as string;
+  const { params } = request.validated as z.infer<typeof groupIdSchema>;
+  const { groupId } = params;
   const { group } = await getGroupForAcceptedMember(groupId, request.user._id.toString());
   const isHost = group.hostUserId.toString() === request.user._id.toString();
   const members = await getGroupMembersWithLocations(group._id.toString());

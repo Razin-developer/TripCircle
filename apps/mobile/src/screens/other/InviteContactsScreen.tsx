@@ -14,6 +14,9 @@ import { useToastStore } from "@/stores/toastStore";
 
 type Props = NativeStackScreenProps<AppStackParamList, "InviteContacts">;
 
+const getContactKey = (contact: Contacts.Contact, index = 0) =>
+  contact.name ?? contact.phoneNumbers?.[0]?.number ?? `contact-${index}`;
+
 export function InviteContactsScreen({ navigation, route }: Props) {
   const theme = useTheme();
   const [permissionGranted, setPermissionGranted] = useState<boolean | null>(null);
@@ -162,5 +165,3 @@ export function InviteContactsScreen({ navigation, route }: Props) {
     </Screen>
   );
 }
-  const getContactKey = (contact: Contacts.Contact, index = 0) =>
-    contact.id ?? contact.name ?? contact.phoneNumbers?.[0]?.number ?? `contact-${index}`;

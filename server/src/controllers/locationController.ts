@@ -25,7 +25,8 @@ export const locationSchema = z.object({
 });
 
 export const postLocation = asyncHandler(async (request, response) => {
-  const groupId = request.params.groupId as string;
+  const { body, params } = request.validated as z.infer<typeof locationSchema>;
+  const { groupId } = params;
   const { group, member } = await getGroupForAcceptedMember(groupId, request.user._id.toString());
 
   if (!member.isSharingLocation) {
@@ -43,7 +44,7 @@ export const postLocation = asyncHandler(async (request, response) => {
         userId: request.user._id,
         phoneNumber: request.user.phoneNumber,
         deviceName: request.user.deviceName,
-        ...request.body
+        ...body
       }
     },
     {
@@ -62,7 +63,7 @@ export const postLocation = asyncHandler(async (request, response) => {
     userId: request.user._id.toString(),
     phoneNumber: request.user.phoneNumber,
     deviceName: request.user.deviceName,
-    ...request.body,
+    ...body,
     updatedAt
   };
 

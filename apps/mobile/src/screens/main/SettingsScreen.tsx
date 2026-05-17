@@ -10,6 +10,7 @@ import { StatPill } from "@/components/StatPill";
 import { useTheme } from "@/hooks/useTheme";
 import type { MainTabParamList } from "@/navigation/types";
 import { authService } from "@/services/authService";
+import { logger } from "@/services/logger";
 import { useAuthStore } from "@/stores/authStore";
 import { useToastStore } from "@/stores/toastStore";
 import { themeNames } from "@/themes/themes";
@@ -27,7 +28,10 @@ export function SettingsScreen(_props: BottomTabScreenProps<MainTabParamList, "S
   const [name, setName] = useState(user?.name ?? "");
   const [deviceName, setDeviceName] = useState(user?.deviceName ?? "");
   const [permissionLabel, setPermissionLabel] = useState("Checking...");
+  const [logLabel, setLogLabel] = useState("Checking...");
   const [saving, setSaving] = useState(false);
+  const [exportingLogs, setExportingLogs] = useState(false);
+  const [clearingLogs, setClearingLogs] = useState(false);
 
   useEffect(() => {
     setName(user?.name ?? "");
@@ -40,6 +44,20 @@ export function SettingsScreen(_props: BottomTabScreenProps<MainTabParamList, "S
         setPermissionLabel(`Foreground: ${snapshot.foreground} • Background: ${snapshot.background}`);
       })
       .catch(() => setPermissionLabel("Permission status unavailable"));
+  }, []);
+
+  useEffect(() => {
+    logger
+      .getLatestLogInfo()
+      .then((info) => {
+        if (!info) {
+          setLogLabel("No log file yet");
+          return;
+        }
+
+        setLogLabel(`Latest log size: ${Math.max(1, Math.round(info.size / 1024))} KB`);
+      })
+      .catch(() => setLogLabel("Log status unavailable"));
   }, []);
 
   const handleSave = async () => {
@@ -64,6 +82,44 @@ export function SettingsScreen(_props: BottomTabScreenProps<MainTabParamList, "S
       setUser(updatedUser);
     } catch (error: any) {
       showToast(error?.response?.data?.message ?? "Could not update theme.");
+    }
+  };
+
+  const refreshLogStatus = async () => {
+    const info = await logger.getLatestLogInfo();
+
+    if (!info) {
+      setLogLabel("No log file yet");
+      return;
+    }
+
+    setLogLabel(`Latest log size: ${Math.max(1, Math.round(info.size / 1024))} KB`);
+  };
+
+  const handleExportLogs = async () => {
+    try {
+      setExportingLogs(true);
+      await logger.log("info", "logs", "User requested log export");
+      await logger.shareLatestLog();
+      await refreshLogStatus();
+      showToast("Log file export opened.");
+    } catch (error: any) {
+      showToast(error?.message ?? "Could not export logs.");
+    } finally {
+      setExportingLogs(false);
+    }
+  };
+
+  const handleClearLogs = async () => {
+    try {
+      setClearingLogs(true);
+      await logger.clearLogs();
+      setLogLabel("No log file yet");
+      showToast("Saved logs cleared.");
+    } catch (error: any) {
+      showToast(error?.message ?? "Could not clear logs.");
+    } finally {
+      setClearingLogs(false);
     }
   };
 
@@ -94,6 +150,19 @@ export function SettingsScreen(_props: BottomTabScreenProps<MainTabParamList, "S
             <Switch value={showPhoneNumbers} onValueChange={setShowPhoneNumbers} />
           </View>
           <StatPill label={permissionLabel} />
+        </GlassCard>
+
+        <GlassCard style={{ gap: 14 }}>
+          <Text style={{ color: theme.text, fontSize: 18, fontWeight: "700" }}>Diagnostics</Text>
+          <Text style={{ color: theme.subtleText, lineHeight: 20 }}>
+            Production logs include API requests, responses, failures, route changes, and socket activity with timestamps.
+          </Text>
+          <StatPill label={logLabel} />
+          <Text style={{ color: theme.subtleText, lineHeight: 20 }}>
+            {logger.getHumanReadableLocation()}
+          </Text>
+          <PrimaryButton label="Export Latest Log File" onPress={handleExportLogs} loading={exportingLogs} />
+          <PrimaryButton label="Clear Saved Logs" onPress={handleClearLogs} loading={clearingLogs} variant="secondary" />
         </GlassCard>
 
         <GlassCard style={{ gap: 14 }}>

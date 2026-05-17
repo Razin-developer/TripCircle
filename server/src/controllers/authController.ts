@@ -66,7 +66,8 @@ export const registerSchema = authSchema.refine(
 export const loginSchema = authSchema;
 
 export const register = asyncHandler(async (request, response) => {
-  const { phoneNumber, name, deviceName } = request.body as z.infer<typeof registerSchema>["body"];
+  const { body } = request.validated as z.infer<typeof registerSchema>;
+  const { phoneNumber, name, deviceName } = body;
   const normalizedPhoneNumber = normalizePhoneNumber(phoneNumber);
 
   const user = await User.findOneAndUpdate(
@@ -95,7 +96,8 @@ export const register = asyncHandler(async (request, response) => {
 });
 
 export const login = asyncHandler(async (request, response) => {
-  const { phoneNumber } = request.body as z.infer<typeof loginSchema>["body"];
+  const { body } = request.validated as z.infer<typeof loginSchema>;
+  const { phoneNumber } = body;
   const normalizedPhoneNumber = normalizePhoneNumber(phoneNumber);
 
   const user = await User.findOne({ phoneNumber: normalizedPhoneNumber });
