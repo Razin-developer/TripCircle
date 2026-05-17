@@ -3,4 +3,9 @@ class AppConfig {
     'API_BASE_URL',
     defaultValue: 'https://tripcircle-e4ko.onrender.com',
   );
+
+  static const String socketUrl = String.fromEnvironment(
+    'SOCKET_URL',
+    defaultValue: apiBaseUrl,
+  );
 }
