@@ -4,22 +4,22 @@ on:
   workflow_dispatch:
     inputs:
       release_tag:
-        description: "Git tag to create or update, for example v1.0.0"
+        description: 'Git tag to create or update, for example v1.0.0'
         required: true
         type: string
       release_name:
-        description: "Optional GitHub release title"
+        description: 'Optional GitHub release title'
         required: false
-        default: ""
+        default: ''
         type: string
       prerelease:
-        description: "Mark the GitHub release as a prerelease"
+        description: 'Mark the GitHub release as a prerelease'
         required: false
         default: false
         type: boolean
   push:
     tags:
-      - "v*"
+      - 'v*'
 
 permissions:
   contents: write
@@ -31,8 +31,8 @@ jobs:
       run:
         working-directory: apps/flutter
     env:
-      JAVA_VERSION: "17"
-      FLUTTER_VERSION: "3.41.7"
+      JAVA_VERSION: '17'
+      FLUTTER_VERSION: '3.41.7'
       API_BASE_URL: ${{ vars.FLUTTER_API_BASE_URL || 'https://tripcircle-e4ko.onrender.com' }}
       RELEASE_TAG: ${{ github.event_name == 'workflow_dispatch' && inputs.release_tag || github.ref_name }}
       RELEASE_NAME: ${{ github.event_name == 'workflow_dispatch' && inputs.release_name || github.ref_name }}
@@ -88,7 +88,7 @@ jobs:
           storePassword=${{ secrets.FLUTTER_KEYSTORE_PASSWORD }}
           keyPassword=${{ secrets.FLUTTER_KEY_PASSWORD }}
           keyAlias=${{ secrets.FLUTTER_KEY_ALIAS }}
-          storeFile=app/release-keystore.jks
+          storeFile=release-keystore.jks
           EOF
 
       - name: Analyze Flutter app
