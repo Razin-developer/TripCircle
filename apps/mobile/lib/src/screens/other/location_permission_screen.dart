@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 
+import '../../services/live_location_service.dart';
 import '../../state/app_controller.dart';
 import '../../utils/location_modes.dart';
 import '../../widgets/glass_card.dart';
@@ -38,6 +39,8 @@ class _LocationPermissionScreenState extends State<LocationPermissionScreen> {
 
   @override
   Widget build(BuildContext context) {
+    final theme = Theme.of(context);
+
     return Scaffold(
       body: ScreenShell(
         screenName: 'LocationPermissionScreen',
@@ -46,7 +49,7 @@ class _LocationPermissionScreenState extends State<LocationPermissionScreen> {
           'groupName': widget.groupName,
         },
         title: 'Turn on live location',
-        subtitle: 'Sharing starts only after you accept a group invite and grant both foreground and background location access.',
+        subtitle: 'Sharing starts after you grant location access and TripCircle can read your position while you use the app.',
         child: ListView(
           children: [
             GlassCard(
@@ -55,12 +58,12 @@ class _LocationPermissionScreenState extends State<LocationPermissionScreen> {
                 children: [
                   Text(
                     'Before you continue',
-                    style: Theme.of(context).textTheme.titleMedium?.copyWith(fontWeight: FontWeight.w800),
+                    style: theme.textTheme.titleMedium?.copyWith(fontWeight: FontWeight.w800),
                   ),
                   const SizedBox(height: 12),
                   Text(
-                    'TripCircle will show a clear system prompt, display an active sharing indicator, and let you stop sharing from group settings at any time.',
-                    style: Theme.of(context).textTheme.bodyMedium?.copyWith(color: Theme.of(context).hintColor, height: 1.4),
+                    'TripCircle will request device location, send your coordinates to this trip group, and let you stop sharing from group settings at any time.',
+                    style: theme.textTheme.bodyMedium?.copyWith(color: theme.hintColor, height: 1.4),
                   ),
                 ],
               ),
@@ -72,14 +75,14 @@ class _LocationPermissionScreenState extends State<LocationPermissionScreen> {
                 children: [
                   Text(
                     'Update mode',
-                    style: Theme.of(context).textTheme.titleMedium?.copyWith(fontWeight: FontWeight.w800),
+                    style: theme.textTheme.titleMedium?.copyWith(fontWeight: FontWeight.w800),
                   ),
                   const SizedBox(height: 12),
                   ...locationModeOptions.map(
                     (option) => Padding(
                       padding: const EdgeInsets.only(bottom: 10),
                       child: PrimaryButton(
-                        label: '${option.label} • ${option.description}',
+                        label: '${option.label} - ${option.description}',
                         onPressed: () {
                           setState(() {
                             selectedMode = option.value;
@@ -96,32 +99,7 @@ class _LocationPermissionScreenState extends State<LocationPermissionScreen> {
             PrimaryButton(
               label: 'Enable Live Sharing',
               isLoading: widget.controller.isBusy,
-              onPressed: () async {
-                await widget.controller.updateGroup(
-                  groupId: widget.groupId,
-                  isSharingLocation: true,
-                  locationUpdateMode: selectedMode,
-                );
-
-                if (!context.mounted || widget.controller.errorMessage != null) {
-                  return;
-                }
-
-                if (widget.replaceWithGroupTabs) {
-                  Navigator.of(context).pushReplacement(
-                    MaterialPageRoute(
-                      settings: RouteSettings(name: 'GroupTabsScreen:${widget.groupId}'),
-                      builder: (_) => GroupTabsScreen(
-                        controller: widget.controller,
-                        groupId: widget.groupId,
-                        groupName: widget.groupName,
-                      ),
-                    ),
-                  );
-                } else {
-                  Navigator.of(context).pop();
-                }
-              },
+              onPressed: _enableLiveSharing,
             ),
             const SizedBox(height: 12),
             PrimaryButton(
@@ -133,5 +111,68 @@ class _LocationPermissionScreenState extends State<LocationPermissionScreen> {
         ),
       ),
     );
+  }
+
+  Future<void> _enableLiveSharing() async {
+    final permissionStatus = await LiveLocationService.instance.ensurePermission();
+
+    if (!mounted) {
+      return;
+    }
+
+    if (permissionStatus != LiveLocationPermissionStatus.granted) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(content: Text(_permissionMessage(permissionStatus))),
+      );
+      return;
+    }
+
+    await widget.controller.updateGroup(
+      groupId: widget.groupId,
+      isSharingLocation: true,
+      locationUpdateMode: selectedMode,
+    );
+
+    if (!mounted || widget.controller.errorMessage != null) {
+      return;
+    }
+
+    await widget.controller.ensureSocketConnected();
+    await LiveLocationService.instance.publishCurrentLocation(
+      groupId: widget.groupId,
+      mode: selectedMode,
+    );
+
+    if (!mounted) {
+      return;
+    }
+
+    if (widget.replaceWithGroupTabs) {
+      Navigator.of(context).pushReplacement(
+        MaterialPageRoute(
+          settings: RouteSettings(name: 'GroupTabsScreen:${widget.groupId}'),
+          builder: (_) => GroupTabsScreen(
+            controller: widget.controller,
+            groupId: widget.groupId,
+            groupName: widget.groupName,
+          ),
+        ),
+      );
+    } else {
+      Navigator.of(context).pop();
+    }
+  }
+
+  String _permissionMessage(LiveLocationPermissionStatus status) {
+    switch (status) {
+      case LiveLocationPermissionStatus.servicesDisabled:
+        return 'Turn on device location services to start live sharing.';
+      case LiveLocationPermissionStatus.deniedForever:
+        return 'Location permission is permanently denied. Enable it from system settings.';
+      case LiveLocationPermissionStatus.denied:
+        return 'Location permission is required to share your live position.';
+      case LiveLocationPermissionStatus.granted:
+        return 'Location permission granted.';
+    }
   }
 }

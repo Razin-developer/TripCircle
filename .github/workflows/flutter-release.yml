@@ -92,7 +92,10 @@ jobs:
           EOF
 
       - name: Analyze Flutter app
-        run: flutter analyze lib
+        run: flutter analyze
+
+      - name: Run Flutter tests
+        run: flutter test
 
       - name: Build release APK
         run: flutter build apk --release --dart-define=API_BASE_URL=${API_BASE_URL}

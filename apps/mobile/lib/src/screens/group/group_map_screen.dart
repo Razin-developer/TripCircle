@@ -5,6 +5,7 @@ import 'package:flutter/material.dart';
 
 import '../../models/app_models.dart';
 import '../../services/app_logger.dart';
+import '../../services/live_location_service.dart';
 import '../../services/socket_service.dart';
 import '../../state/app_controller.dart';
 import '../../utils/format.dart';
@@ -38,6 +39,8 @@ class _GroupMapScreenState extends State<GroupMapScreen> {
 
   GroupDetailResponse? groupDetail;
   bool loading = true;
+  String? highlightedMemberId;
+  String? liveLocationNotice;
 
   @override
   void initState() {
@@ -73,12 +76,11 @@ class _GroupMapScreenState extends State<GroupMapScreen> {
   @override
   void dispose() {
     SocketService.instance.leaveGroup(widget.groupId);
-
     SocketService.instance.off('location:updated', _locationUpdatedHandler);
     SocketService.instance.off('member:online', _memberOnlineHandler);
     SocketService.instance.off('member:offline', _memberOfflineHandler);
     SocketService.instance.off('group:membersUpdated', _membersUpdatedHandler);
-
+    unawaited(LiveLocationService.instance.stopSharing());
     unawaited(
       AppLogger.instance.info(
         'map',
@@ -86,7 +88,6 @@ class _GroupMapScreenState extends State<GroupMapScreen> {
         data: {'groupId': widget.groupId},
       ),
     );
-
     super.dispose();
   }
 
@@ -103,10 +104,21 @@ class _GroupMapScreenState extends State<GroupMapScreen> {
       return;
     }
 
+    final acceptedMembers = _acceptedMembers(detail?.members ?? const <GroupMember>[]);
+    final locatedMembers = _locatedMembers(acceptedMembers);
+    final resolvedHighlight = _resolveHighlightedMemberId(
+      locatedMembers,
+      currentUserId: widget.controller.user?.id,
+      previousId: highlightedMemberId,
+    );
+
     setState(() {
       groupDetail = detail;
       loading = false;
+      highlightedMemberId = resolvedHighlight;
     });
+
+    await _syncOwnLocationSharing(detail);
 
     unawaited(
       AppLogger.instance.info(
@@ -115,14 +127,40 @@ class _GroupMapScreenState extends State<GroupMapScreen> {
         data: {
           'groupId': widget.groupId,
           'members': detail?.members.length ?? 0,
-          'locatedMembers':
-              detail?.members
-                  .where((member) => _isValidLocation(member.location))
-                  .length ??
-              0,
+          'locatedMembers': locatedMembers.length,
+          'sharingMembers': acceptedMembers.where((member) => member.isSharingLocation).length,
         },
       ),
     );
+  }
+
+  Future<void> _syncOwnLocationSharing(GroupDetailResponse? detail) async {
+    final currentUserId = widget.controller.user?.id;
+    final currentMember = _findMemberByUserId(detail?.members ?? const <GroupMember>[], currentUserId);
+
+    if (currentMember?.isSharingLocation != true) {
+      await LiveLocationService.instance.stopSharing();
+      if (!mounted) {
+        return;
+      }
+      setState(() {
+        liveLocationNotice = null;
+      });
+      return;
+    }
+
+    final permissionStatus = await LiveLocationService.instance.startSharing(
+      groupId: widget.groupId,
+      mode: currentMember?.locationUpdateMode ?? 'balanced',
+    );
+
+    if (!mounted) {
+      return;
+    }
+
+    setState(() {
+      liveLocationNotice = _permissionNotice(permissionStatus);
+    });
   }
 
   void _handleLocationUpdated(dynamic payload) {
@@ -149,7 +187,6 @@ class _GroupMapScreenState extends State<GroupMapScreen> {
 
     final resolvedLatitude = latitude!;
     final resolvedLongitude = longitude!;
-
     final detail = groupDetail;
 
     if (detail == null) {
@@ -164,21 +201,18 @@ class _GroupMapScreenState extends State<GroupMapScreen> {
             return member;
           }
 
-          final updatedAt =
-              data['updatedAt']?.toString() ?? DateTime.now().toIso8601String();
+          final updatedAt = data['updatedAt']?.toString() ?? DateTime.now().toIso8601String();
 
           return member.copyWith(
             isOnline: true,
+            isSharingLocation: true,
             lastSeenAt: updatedAt,
             location: LocationSnapshot(
               id: member.location?.id ?? 'live-$userId',
               groupId: widget.groupId,
               userId: userId,
               phoneNumber: data['phoneNumber']?.toString() ?? member.phoneNumber,
-              username:
-                  data['username']?.toString() ??
-                  member.user?.username ??
-                  'unknown',
+              username: data['username']?.toString() ?? member.user?.username ?? 'unknown',
               latitude: resolvedLatitude,
               longitude: resolvedLongitude,
               nearbyPlaceName: data['nearbyPlaceName']?.toString() ?? '',
@@ -193,18 +227,9 @@ class _GroupMapScreenState extends State<GroupMapScreen> {
           );
         }).toList(),
       );
-    });
 
-    unawaited(
-      AppLogger.instance.info(
-        'map',
-        'Applied live location update',
-        data: {
-          'groupId': widget.groupId,
-          'userId': userId,
-        },
-      ),
-    );
+      highlightedMemberId ??= userId;
+    });
   }
 
   void _handleMemberOnline(dynamic payload) {
@@ -241,11 +266,7 @@ class _GroupMapScreenState extends State<GroupMapScreen> {
       groupDetail = GroupDetailResponse(
         group: detail.group,
         members: detail.members
-            .map(
-              (member) => member.userId == userId
-                  ? member.copyWith(isOnline: isOnline)
-                  : member,
-            )
+            .map((member) => member.userId == userId ? member.copyWith(isOnline: isOnline) : member)
             .toList(),
       );
     });
@@ -254,15 +275,12 @@ class _GroupMapScreenState extends State<GroupMapScreen> {
   @override
   Widget build(BuildContext context) {
     final detail = groupDetail;
-
-    final acceptedMembers =
-        detail?.members.where((member) => member.status == 'accepted').toList() ??
-        const <GroupMember>[];
-
-    final locatedMembers = acceptedMembers
-        .where((member) => _isValidLocation(member.location))
-        .toList();
-
+    final acceptedMembers = _acceptedMembers(detail?.members ?? const <GroupMember>[]);
+    final locatedMembers = _locatedMembers(acceptedMembers);
+    final sharingMembers = acceptedMembers.where((member) => member.isSharingLocation).toList(growable: false);
+    final highlightedMember = _findMemberByKey(locatedMembers, highlightedMemberId) ??
+        _findMemberByUserId(locatedMembers, widget.controller.user?.id) ??
+        (locatedMembers.isNotEmpty ? locatedMembers.first : null);
     final onlineCount = acceptedMembers.where((member) => member.isOnline).length;
 
     return Scaffold(
@@ -273,7 +291,7 @@ class _GroupMapScreenState extends State<GroupMapScreen> {
           children: [
             Text(widget.groupName),
             Text(
-              'Live trip view',
+              'Live trip map',
               style: Theme.of(context).textTheme.bodySmall?.copyWith(
                     color: Theme.of(context).hintColor,
                   ),
@@ -285,154 +303,286 @@ class _GroupMapScreenState extends State<GroupMapScreen> {
         onRefresh: _loadGroup,
         child: ListView(
           physics: const AlwaysScrollableScrollPhysics(),
-          padding: const EdgeInsets.all(16),
+          padding: EdgeInsets.zero,
           children: [
-            if (loading)
-              const GlassCard(
-                child: Padding(
-                  padding: EdgeInsets.all(12),
-                  child: Center(child: CircularProgressIndicator()),
-                ),
-              )
-            else ...[
-              Text(
-                widget.groupName,
-                style: Theme.of(context).textTheme.headlineSmall?.copyWith(
-                      fontWeight: FontWeight.w900,
+            _MapHero(
+              groupName: detail?.group.name ?? widget.groupName,
+              members: locatedMembers,
+              currentUserId: widget.controller.user?.id,
+              highlightedMemberId: _memberKey(highlightedMember),
+              onlineCount: onlineCount,
+              acceptedCount: acceptedMembers.length,
+              liveLocationNotice: liveLocationNotice,
+              highlightedMember: highlightedMember,
+              onRefresh: _loadGroup,
+              onFocusCurrentUser: () {
+                final currentUserMember = _findMemberByUserId(locatedMembers, widget.controller.user?.id);
+                if (currentUserMember == null) {
+                  return;
+                }
+                setState(() {
+                  highlightedMemberId = _memberKey(currentUserMember);
+                });
+              },
+            ),
+            Padding(
+              padding: const EdgeInsets.fromLTRB(16, 12, 16, 24),
+              child: Column(
+                children: [
+                  if (loading)
+                    const GlassCard(
+                      child: Padding(
+                        padding: EdgeInsets.symmetric(vertical: 40),
+                        child: Center(child: CircularProgressIndicator()),
+                      ),
+                    )
+                  else if (locatedMembers.isEmpty)
+                    _MapEmptyState(
+                      acceptedCount: acceptedMembers.length,
+                      sharingCount: sharingMembers.length,
+                    )
+                  else ...[
+                    _SectionHeader(
+                      title: 'Travellers on the map',
+                      subtitle: 'Tap a card to focus that traveller on the live map.',
                     ),
-              ),
-              const SizedBox(height: 4),
-              Text(
-                'Live trip view for your accepted members.',
-                style: Theme.of(context).textTheme.bodyMedium?.copyWith(
-                      color: Theme.of(context).hintColor,
+                    const SizedBox(height: 12),
+                    ...locatedMembers.map(
+                      (member) => Padding(
+                        padding: const EdgeInsets.only(bottom: 12),
+                        child: _TravelerLocationCard(
+                          member: member,
+                          isHighlighted: _memberKey(member) == _memberKey(highlightedMember),
+                          onTap: () {
+                            setState(() {
+                              highlightedMemberId = _memberKey(member);
+                            });
+
+                            showModalBottomSheet<void>(
+                              context: context,
+                              showDragHandle: true,
+                              isScrollControlled: true,
+                              builder: (_) => _MemberLocationSheet(member: member),
+                            );
+                          },
+                        ),
+                      ),
                     ),
+                  ],
+                ],
               ),
-              const SizedBox(height: 16),
-              _LiveMapCard(
-                groupName: detail?.group.name ?? widget.groupName,
-                onlineCount: onlineCount,
-                acceptedCount:
-                    detail?.group.acceptedCount ?? acceptedMembers.length,
-                members: locatedMembers,
-                currentUserId: widget.controller.user?.id,
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+
+  String? _permissionNotice(LiveLocationPermissionStatus status) {
+    switch (status) {
+      case LiveLocationPermissionStatus.granted:
+        return null;
+      case LiveLocationPermissionStatus.servicesDisabled:
+        return 'Turn on device location services to send live map updates.';
+      case LiveLocationPermissionStatus.denied:
+        return 'Location permission was denied, so your live marker cannot update yet.';
+      case LiveLocationPermissionStatus.deniedForever:
+        return 'Location permission is blocked in system settings, so live sharing cannot start.';
+    }
+  }
+}
+
+class _MapHero extends StatelessWidget {
+  const _MapHero({
+    required this.groupName,
+    required this.members,
+    required this.currentUserId,
+    required this.highlightedMemberId,
+    required this.onlineCount,
+    required this.acceptedCount,
+    required this.liveLocationNotice,
+    required this.highlightedMember,
+    required this.onRefresh,
+    required this.onFocusCurrentUser,
+  });
+
+  final String groupName;
+  final List<GroupMember> members;
+  final String? currentUserId;
+  final String? highlightedMemberId;
+  final int onlineCount;
+  final int acceptedCount;
+  final String? liveLocationNotice;
+  final GroupMember? highlightedMember;
+  final Future<void> Function() onRefresh;
+  final VoidCallback onFocusCurrentUser;
+
+  @override
+  Widget build(BuildContext context) {
+    final theme = Theme.of(context);
+
+    return SizedBox(
+      height: 520,
+      child: Stack(
+        fit: StackFit.expand,
+        children: [
+          _OpenStreetMapPreview(
+            center: _centerFor(members, highlightedUserId: highlightedMemberId),
+            zoom: members.isEmpty ? 5 : 14,
+            members: members,
+            currentUserId: currentUserId,
+            highlightedUserId: highlightedMemberId,
+          ),
+          DecoratedBox(
+            decoration: BoxDecoration(
+              gradient: LinearGradient(
+                begin: Alignment.topCenter,
+                end: Alignment.bottomCenter,
+                colors: [
+                  Colors.black.withValues(alpha: 0.24),
+                  Colors.transparent,
+                  Colors.black.withValues(alpha: 0.26),
+                ],
               ),
-              const SizedBox(height: 16),
-              if (locatedMembers.isEmpty)
-                const _SimpleEmptyState(
-                  title: 'No valid live locations yet',
-                  body:
-                      'Accepted travellers will appear here once sharing is enabled and the backend receives location updates.',
-                )
-              else
-                ...locatedMembers.map(
-                  (member) => Padding(
-                    padding: const EdgeInsets.only(bottom: 12),
-                    child: InkWell(
-                      borderRadius: BorderRadius.circular(24),
-                      onTap: () {
-                        showModalBottomSheet<void>(
-                          context: context,
-                          showDragHandle: true,
-                          isScrollControlled: true,
-                          builder: (_) => _MemberLocationSheet(member: member),
-                        );
-                      },
-                      child: GlassCard(
-                        child: Column(
-                          crossAxisAlignment: CrossAxisAlignment.start,
-                          children: [
-                            Row(
-                              children: [
-                                CircleAvatar(
-                                  backgroundColor:
-                                      _parseColor(member.user?.avatarColor) ??
-                                          Theme.of(context).colorScheme.primary,
-                                  child: Text(
-                                    initialsFromName(
-                                      member.user?.name ??
-                                          member.location?.username ??
-                                          'TC',
-                                    ),
-                                    style: const TextStyle(
-                                      color: Colors.white,
-                                      fontWeight: FontWeight.w900,
-                                    ),
-                                  ),
-                                ),
-                                const SizedBox(width: 12),
-                                Expanded(
-                                  child: Column(
-                                    crossAxisAlignment:
-                                        CrossAxisAlignment.start,
-                                    children: [
-                                      Text(
-                                        member.user?.name ?? member.phoneNumber,
-                                        style: Theme.of(context)
-                                            .textTheme
-                                            .titleMedium
-                                            ?.copyWith(
-                                              fontWeight: FontWeight.w800,
-                                            ),
-                                      ),
-                                      const SizedBox(height: 2),
-                                      Text(
-                                        '@${member.user?.username ?? member.location?.username ?? 'unknown'}',
-                                        style: Theme.of(context)
-                                            .textTheme
-                                            .bodyMedium
-                                            ?.copyWith(
-                                              color:
-                                                  Theme.of(context).hintColor,
-                                            ),
-                                      ),
-                                    ],
-                                  ),
-                                ),
-                                Chip(
-                                  avatar: Icon(
-                                    Icons.circle,
-                                    size: 10,
-                                    color: member.isOnline
-                                        ? Colors.green
-                                        : Theme.of(context).hintColor,
-                                  ),
-                                  label: Text(
-                                    member.isOnline ? 'Online' : 'Offline',
-                                  ),
-                                ),
-                              ],
-                            ),
-                            const SizedBox(height: 12),
-                            Text(
-                              '${member.location!.latitude.toStringAsFixed(5)}, ${member.location!.longitude.toStringAsFixed(5)}',
-                            ),
-                            const SizedBox(height: 4),
-                            Text(
-                              '${member.location?.nearbyPlaceName.isNotEmpty == true ? member.location!.nearbyPlaceName : 'Unknown area'} • ${member.location?.state ?? 'State unavailable'} • ${member.location?.country ?? 'Country unavailable'}',
-                              style: Theme.of(context)
-                                  .textTheme
-                                  .bodyMedium
-                                  ?.copyWith(
-                                    color: Theme.of(context).hintColor,
-                                  ),
-                            ),
-                            const SizedBox(height: 4),
-                            Text(
-                              'Updated ${formatRelativeTime(member.location?.updatedAt ?? member.lastSeenAt)}',
-                              style: Theme.of(context)
-                                  .textTheme
-                                  .bodyMedium
-                                  ?.copyWith(
-                                    color: Theme.of(context).hintColor,
-                                  ),
-                            ),
-                          ],
+            ),
+          ),
+          SafeArea(
+            bottom: false,
+            child: Padding(
+              padding: const EdgeInsets.fromLTRB(16, 16, 16, 16),
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Row(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      Expanded(
+                        child: _MapHeadlineCard(
+                          groupName: groupName,
+                          onlineCount: onlineCount,
+                          acceptedCount: acceptedCount,
+                          liveLocationNotice: liveLocationNotice,
+                        ),
+                      ),
+                      const SizedBox(width: 12),
+                      Column(
+                        children: [
+                          _MapActionButton(
+                            icon: Icons.refresh_rounded,
+                            tooltip: 'Refresh map',
+                            onPressed: () {
+                              unawaited(onRefresh());
+                            },
+                          ),
+                          const SizedBox(height: 10),
+                          _MapActionButton(
+                            icon: Icons.my_location_rounded,
+                            tooltip: 'Focus on my location',
+                            onPressed: onFocusCurrentUser,
+                          ),
+                        ],
+                      ),
+                    ],
+                  ),
+                  const Spacer(),
+                  _MapBottomSheet(member: highlightedMember),
+                  const SizedBox(height: 12),
+                  Align(
+                    alignment: Alignment.bottomRight,
+                    child: DecoratedBox(
+                      decoration: BoxDecoration(
+                        color: theme.colorScheme.surface.withValues(alpha: 0.88),
+                        borderRadius: BorderRadius.circular(10),
+                      ),
+                      child: const Padding(
+                        padding: EdgeInsets.symmetric(horizontal: 10, vertical: 6),
+                        child: Text(
+                          'Copyright OpenStreetMap contributors',
+                          style: TextStyle(fontSize: 10, color: Colors.black87),
                         ),
                       ),
                     ),
                   ),
+                ],
+              ),
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+}
+
+class _MapHeadlineCard extends StatelessWidget {
+  const _MapHeadlineCard({
+    required this.groupName,
+    required this.onlineCount,
+    required this.acceptedCount,
+    required this.liveLocationNotice,
+  });
+
+  final String groupName;
+  final int onlineCount;
+  final int acceptedCount;
+  final String? liveLocationNotice;
+
+  @override
+  Widget build(BuildContext context) {
+    final theme = Theme.of(context);
+
+    return DecoratedBox(
+      decoration: BoxDecoration(
+        color: theme.colorScheme.surface.withValues(alpha: 0.92),
+        borderRadius: BorderRadius.circular(24),
+        border: Border.all(color: theme.dividerColor.withValues(alpha: 0.45)),
+        boxShadow: [
+          BoxShadow(
+            color: Colors.black.withValues(alpha: 0.08),
+            blurRadius: 18,
+            offset: const Offset(0, 10),
+          ),
+        ],
+      ),
+      child: Padding(
+        padding: const EdgeInsets.all(16),
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            Text(
+              groupName,
+              style: theme.textTheme.titleLarge?.copyWith(fontWeight: FontWeight.w900),
+            ),
+            const SizedBox(height: 6),
+            Text(
+              '$onlineCount online / $acceptedCount accepted',
+              style: theme.textTheme.bodyMedium?.copyWith(color: theme.hintColor),
+            ),
+            if (liveLocationNotice != null) ...[
+              const SizedBox(height: 10),
+              DecoratedBox(
+                decoration: BoxDecoration(
+                  color: const Color(0xFFFFF4D8),
+                  borderRadius: BorderRadius.circular(16),
                 ),
+                child: Padding(
+                  padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 10),
+                  child: Row(
+                    children: [
+                      const Icon(Icons.location_off_rounded, size: 18, color: Color(0xFF9A6B00)),
+                      const SizedBox(width: 8),
+                      Expanded(
+                        child: Text(
+                          liveLocationNotice!,
+                          style: theme.textTheme.bodySmall?.copyWith(
+                            color: const Color(0xFF734F00),
+                            fontWeight: FontWeight.w600,
+                          ),
+                        ),
+                      ),
+                    ],
+                  ),
+                ),
+              ),
             ],
           ],
         ),
@@ -441,25 +591,242 @@ class _GroupMapScreenState extends State<GroupMapScreen> {
   }
 }
 
-class _SimpleEmptyState extends StatelessWidget {
-  const _SimpleEmptyState({
-    required this.title,
-    required this.body,
+class _MapActionButton extends StatelessWidget {
+  const _MapActionButton({
+    required this.icon,
+    required this.tooltip,
+    required this.onPressed,
   });
 
-  final String title;
-  final String body;
+  final IconData icon;
+  final String tooltip;
+  final VoidCallback onPressed;
 
   @override
   Widget build(BuildContext context) {
+    return Tooltip(
+      message: tooltip,
+      child: Material(
+        color: Theme.of(context).colorScheme.surface.withValues(alpha: 0.94),
+        elevation: 8,
+        borderRadius: BorderRadius.circular(18),
+        child: InkWell(
+          borderRadius: BorderRadius.circular(18),
+          onTap: onPressed,
+          child: SizedBox(
+            width: 54,
+            height: 54,
+            child: Icon(icon),
+          ),
+        ),
+      ),
+    );
+  }
+}
+
+class _MapBottomSheet extends StatelessWidget {
+  const _MapBottomSheet({required this.member});
+
+  final GroupMember? member;
+
+  @override
+  Widget build(BuildContext context) {
+    final theme = Theme.of(context);
+
+    if (member == null || member.location == null) {
+      return DecoratedBox(
+        decoration: BoxDecoration(
+          color: theme.colorScheme.surface.withValues(alpha: 0.94),
+          borderRadius: BorderRadius.circular(28),
+        ),
+        child: Padding(
+          padding: const EdgeInsets.all(18),
+          child: Row(
+            children: [
+              const Icon(Icons.travel_explore_rounded),
+              const SizedBox(width: 12),
+              Expanded(
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  mainAxisSize: MainAxisSize.min,
+                  children: [
+                    Text(
+                      'Waiting for live coordinates',
+                      style: theme.textTheme.titleMedium?.copyWith(fontWeight: FontWeight.w900),
+                    ),
+                    const SizedBox(height: 4),
+                    Text(
+                      'Open location sharing for a traveller to see their marker here.',
+                      style: theme.textTheme.bodyMedium?.copyWith(color: theme.hintColor),
+                    ),
+                  ],
+                ),
+              ),
+            ],
+          ),
+        ),
+      );
+    }
+
+    final location = member.location!;
+    final place = location.nearbyPlaceName.isNotEmpty ? location.nearbyPlaceName : 'Unknown area';
+
+    return DecoratedBox(
+      decoration: BoxDecoration(
+        color: theme.colorScheme.surface.withValues(alpha: 0.95),
+        borderRadius: BorderRadius.circular(28),
+        boxShadow: [
+          BoxShadow(
+            color: Colors.black.withValues(alpha: 0.10),
+            blurRadius: 20,
+            offset: const Offset(0, 12),
+          ),
+        ],
+      ),
+      child: Padding(
+        padding: const EdgeInsets.all(18),
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            Row(
+              children: [
+                CircleAvatar(
+                  backgroundColor: _parseColor(member.user?.avatarColor) ?? theme.colorScheme.primary,
+                  child: Text(
+                    initialsFromName(member.user?.name ?? location.username),
+                    style: const TextStyle(color: Colors.white, fontWeight: FontWeight.w900),
+                  ),
+                ),
+                const SizedBox(width: 12),
+                Expanded(
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      Text(
+                        member.user?.name ?? member.phoneNumber,
+                        style: theme.textTheme.titleMedium?.copyWith(fontWeight: FontWeight.w900),
+                      ),
+                      const SizedBox(height: 2),
+                      Text(
+                        '@${member.user?.username ?? location.username}',
+                        style: theme.textTheme.bodyMedium?.copyWith(color: theme.hintColor),
+                      ),
+                    ],
+                  ),
+                ),
+                _OnlinePill(isOnline: member.isOnline),
+              ],
+            ),
+            const SizedBox(height: 14),
+            Text(
+              place,
+              style: theme.textTheme.titleLarge?.copyWith(fontWeight: FontWeight.w900),
+            ),
+            const SizedBox(height: 4),
+            Text(
+              '${location.state.isEmpty ? 'State unavailable' : location.state} / ${location.country.isEmpty ? 'Country unavailable' : location.country}',
+              style: theme.textTheme.bodyMedium?.copyWith(color: theme.hintColor),
+            ),
+            const SizedBox(height: 14),
+            Row(
+              children: [
+                Expanded(
+                  child: _MetricTile(
+                    label: 'Updated',
+                    value: formatRelativeTime(location.updatedAt.isNotEmpty ? location.updatedAt : member.lastSeenAt),
+                  ),
+                ),
+                const SizedBox(width: 10),
+                Expanded(
+                  child: _MetricTile(
+                    label: 'Coordinates',
+                    value: '${location.latitude.toStringAsFixed(4)}, ${location.longitude.toStringAsFixed(4)}',
+                  ),
+                ),
+              ],
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+}
+
+class _MetricTile extends StatelessWidget {
+  const _MetricTile({
+    required this.label,
+    required this.value,
+  });
+
+  final String label;
+  final String value;
+
+  @override
+  Widget build(BuildContext context) {
+    final theme = Theme.of(context);
+
+    return DecoratedBox(
+      decoration: BoxDecoration(
+        color: theme.scaffoldBackgroundColor,
+        borderRadius: BorderRadius.circular(20),
+      ),
+      child: Padding(
+        padding: const EdgeInsets.all(14),
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            Text(
+              label,
+              style: theme.textTheme.labelLarge?.copyWith(
+                color: theme.hintColor,
+                fontWeight: FontWeight.w700,
+              ),
+            ),
+            const SizedBox(height: 6),
+            Text(
+              value,
+              maxLines: 2,
+              overflow: TextOverflow.ellipsis,
+              style: theme.textTheme.titleSmall?.copyWith(fontWeight: FontWeight.w800),
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+}
+
+class _MapEmptyState extends StatelessWidget {
+  const _MapEmptyState({
+    required this.acceptedCount,
+    required this.sharingCount,
+  });
+
+  final int acceptedCount;
+  final int sharingCount;
+
+  @override
+  Widget build(BuildContext context) {
+    String title;
+    String body;
+
+    if (acceptedCount == 0) {
+      title = 'No accepted members yet';
+      body = 'Invite members and wait for them to accept before the trip map fills in.';
+    } else if (sharingCount == 0) {
+      title = 'Live sharing is still off';
+      body = 'At least one accepted traveller needs to turn on location sharing before markers appear.';
+    } else {
+      title = 'Waiting for the first GPS fix';
+      body = 'Sharing is enabled, but the app has not received a valid coordinate from any accepted traveller yet.';
+    }
+
     return GlassCard(
       child: Row(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          Icon(
-            Icons.location_off_rounded,
-            color: Theme.of(context).hintColor,
-          ),
+          Icon(Icons.location_searching_rounded, color: Theme.of(context).colorScheme.primary),
           const SizedBox(width: 12),
           Expanded(
             child: Column(
@@ -467,22 +834,179 @@ class _SimpleEmptyState extends StatelessWidget {
               children: [
                 Text(
                   title,
-                  style: Theme.of(context).textTheme.titleMedium?.copyWith(
-                        fontWeight: FontWeight.w800,
-                      ),
+                  style: Theme.of(context).textTheme.titleMedium?.copyWith(fontWeight: FontWeight.w900),
                 ),
                 const SizedBox(height: 6),
                 Text(
                   body,
                   style: Theme.of(context).textTheme.bodyMedium?.copyWith(
                         color: Theme.of(context).hintColor,
-                        height: 1.4,
+                        height: 1.45,
                       ),
                 ),
               ],
             ),
           ),
         ],
+      ),
+    );
+  }
+}
+
+class _SectionHeader extends StatelessWidget {
+  const _SectionHeader({
+    required this.title,
+    required this.subtitle,
+  });
+
+  final String title;
+  final String subtitle;
+
+  @override
+  Widget build(BuildContext context) {
+    final theme = Theme.of(context);
+
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        Text(
+          title,
+          style: theme.textTheme.titleLarge?.copyWith(fontWeight: FontWeight.w900),
+        ),
+        const SizedBox(height: 4),
+        Text(
+          subtitle,
+          style: theme.textTheme.bodyMedium?.copyWith(color: theme.hintColor),
+        ),
+      ],
+    );
+  }
+}
+
+class _TravelerLocationCard extends StatelessWidget {
+  const _TravelerLocationCard({
+    required this.member,
+    required this.isHighlighted,
+    required this.onTap,
+  });
+
+  final GroupMember member;
+  final bool isHighlighted;
+  final VoidCallback onTap;
+
+  @override
+  Widget build(BuildContext context) {
+    final theme = Theme.of(context);
+    final location = member.location!;
+    final place = location.nearbyPlaceName.isNotEmpty ? location.nearbyPlaceName : 'Unknown area';
+
+    return InkWell(
+      borderRadius: BorderRadius.circular(24),
+      onTap: onTap,
+      child: Container(
+        decoration: BoxDecoration(
+          color: theme.colorScheme.surface,
+          borderRadius: BorderRadius.circular(24),
+          border: Border.all(
+            color: isHighlighted ? theme.colorScheme.primary : theme.dividerColor.withValues(alpha: 0.6),
+            width: isHighlighted ? 2 : 1,
+          ),
+          boxShadow: [
+            BoxShadow(
+              color: Colors.black.withValues(alpha: 0.05),
+              blurRadius: 18,
+              offset: const Offset(0, 12),
+            ),
+          ],
+        ),
+        child: Padding(
+          padding: const EdgeInsets.all(16),
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Row(
+                children: [
+                  CircleAvatar(
+                    backgroundColor: _parseColor(member.user?.avatarColor) ?? theme.colorScheme.primary,
+                    child: Text(
+                      initialsFromName(member.user?.name ?? location.username),
+                      style: const TextStyle(color: Colors.white, fontWeight: FontWeight.w900),
+                    ),
+                  ),
+                  const SizedBox(width: 12),
+                  Expanded(
+                    child: Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        Text(
+                          member.user?.name ?? member.phoneNumber,
+                          style: theme.textTheme.titleMedium?.copyWith(fontWeight: FontWeight.w900),
+                        ),
+                        const SizedBox(height: 2),
+                        Text(
+                          '@${member.user?.username ?? location.username}',
+                          style: theme.textTheme.bodyMedium?.copyWith(color: theme.hintColor),
+                        ),
+                      ],
+                    ),
+                  ),
+                  _OnlinePill(isOnline: member.isOnline),
+                ],
+              ),
+              const SizedBox(height: 14),
+              Text(
+                place,
+                style: theme.textTheme.titleSmall?.copyWith(fontWeight: FontWeight.w800),
+              ),
+              const SizedBox(height: 4),
+              Text(
+                '${location.state.isEmpty ? 'State unavailable' : location.state} / ${location.country.isEmpty ? 'Country unavailable' : location.country}',
+                style: theme.textTheme.bodyMedium?.copyWith(color: theme.hintColor),
+              ),
+              const SizedBox(height: 10),
+              Text(
+                '${location.latitude.toStringAsFixed(5)}, ${location.longitude.toStringAsFixed(5)}',
+                style: theme.textTheme.bodyMedium?.copyWith(fontWeight: FontWeight.w700),
+              ),
+              const SizedBox(height: 4),
+              Text(
+                'Updated ${formatRelativeTime(location.updatedAt.isNotEmpty ? location.updatedAt : member.lastSeenAt)}',
+                style: theme.textTheme.bodyMedium?.copyWith(color: theme.hintColor),
+              ),
+            ],
+          ),
+        ),
+      ),
+    );
+  }
+}
+
+class _OnlinePill extends StatelessWidget {
+  const _OnlinePill({required this.isOnline});
+
+  final bool isOnline;
+
+  @override
+  Widget build(BuildContext context) {
+    return DecoratedBox(
+      decoration: BoxDecoration(
+        color: isOnline ? const Color(0xFFE9F8EE) : const Color(0xFFF1F3F6),
+        borderRadius: BorderRadius.circular(999),
+      ),
+      child: Padding(
+        padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
+        child: Row(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            Icon(
+              Icons.circle,
+              size: 10,
+              color: isOnline ? const Color(0xFF1F9D55) : const Color(0xFF8A94A6),
+            ),
+            const SizedBox(width: 6),
+            Text(isOnline ? 'Online' : 'Offline'),
+          ],
+        ),
       ),
     );
   }
@@ -497,12 +1021,8 @@ class _MemberLocationSheet extends StatelessWidget {
   Widget build(BuildContext context) {
     final theme = Theme.of(context);
     final location = member.location!;
-    final color =
-        _parseColor(member.user?.avatarColor) ?? theme.colorScheme.primary;
-
-    final place = location.nearbyPlaceName.isNotEmpty
-        ? location.nearbyPlaceName
-        : 'Unknown area';
+    final color = _parseColor(member.user?.avatarColor) ?? theme.colorScheme.primary;
+    final place = location.nearbyPlaceName.isNotEmpty ? location.nearbyPlaceName : 'Unknown area';
 
     return SafeArea(
       top: false,
@@ -518,10 +1038,7 @@ class _MemberLocationSheet extends StatelessWidget {
                   backgroundColor: color,
                   child: Text(
                     initialsFromName(member.user?.name ?? location.username),
-                    style: const TextStyle(
-                      color: Colors.white,
-                      fontWeight: FontWeight.w900,
-                    ),
+                    style: const TextStyle(color: Colors.white, fontWeight: FontWeight.w900),
                   ),
                 ),
                 const SizedBox(width: 12),
@@ -531,50 +1048,33 @@ class _MemberLocationSheet extends StatelessWidget {
                     children: [
                       Text(
                         member.user?.name ?? member.phoneNumber,
-                        style: theme.textTheme.titleLarge?.copyWith(
-                          fontWeight: FontWeight.w900,
-                        ),
+                        style: theme.textTheme.titleLarge?.copyWith(fontWeight: FontWeight.w900),
                       ),
                       Text(
                         '@${member.user?.username ?? location.username}',
-                        style: theme.textTheme.bodyMedium?.copyWith(
-                          color: theme.hintColor,
-                        ),
+                        style: theme.textTheme.bodyMedium?.copyWith(color: theme.hintColor),
                       ),
                     ],
                   ),
                 ),
-                Chip(
-                  avatar: Icon(
-                    Icons.circle,
-                    size: 10,
-                    color: member.isOnline ? Colors.green : theme.hintColor,
-                  ),
-                  label: Text(member.isOnline ? 'Online' : 'Offline'),
-                ),
+                _OnlinePill(isOnline: member.isOnline),
               ],
             ),
             const SizedBox(height: 18),
             _LocationDetailRow(
               icon: Icons.place_rounded,
               label: place,
-              value:
-                  '${location.state.isEmpty ? 'State unavailable' : location.state} • ${location.country.isEmpty ? 'Country unavailable' : location.country}',
+              value: '${location.state.isEmpty ? 'State unavailable' : location.state} / ${location.country.isEmpty ? 'Country unavailable' : location.country}',
             ),
             _LocationDetailRow(
               icon: Icons.explore_rounded,
               label: 'Coordinates',
-              value:
-                  '${location.latitude.toStringAsFixed(5)}, ${location.longitude.toStringAsFixed(5)}',
+              value: '${location.latitude.toStringAsFixed(5)}, ${location.longitude.toStringAsFixed(5)}',
             ),
             _LocationDetailRow(
               icon: Icons.schedule_rounded,
               label: 'Last updated',
-              value: formatRelativeTime(
-                location.updatedAt.isNotEmpty
-                    ? location.updatedAt
-                    : member.lastSeenAt,
-              ),
+              value: formatRelativeTime(location.updatedAt.isNotEmpty ? location.updatedAt : member.lastSeenAt),
             ),
             if (location.accuracy != null)
               _LocationDetailRow(
@@ -621,11 +1121,7 @@ class _LocationDetailRow extends StatelessWidget {
       child: Row(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          Icon(
-            icon,
-            size: 20,
-            color: theme.colorScheme.primary,
-          ),
+          Icon(icon, size: 20, color: theme.colorScheme.primary),
           const SizedBox(width: 12),
           Expanded(
             child: Column(
@@ -633,131 +1129,17 @@ class _LocationDetailRow extends StatelessWidget {
               children: [
                 Text(
                   label,
-                  style: theme.textTheme.labelLarge?.copyWith(
-                    fontWeight: FontWeight.w800,
-                  ),
+                  style: theme.textTheme.labelLarge?.copyWith(fontWeight: FontWeight.w800),
                 ),
                 const SizedBox(height: 2),
                 Text(
                   value,
-                  style: theme.textTheme.bodyMedium?.copyWith(
-                    color: theme.hintColor,
-                  ),
+                  style: theme.textTheme.bodyMedium?.copyWith(color: theme.hintColor),
                 ),
               ],
             ),
           ),
         ],
-      ),
-    );
-  }
-}
-
-class _LiveMapCard extends StatelessWidget {
-  const _LiveMapCard({
-    required this.groupName,
-    required this.onlineCount,
-    required this.acceptedCount,
-    required this.members,
-    required this.currentUserId,
-  });
-
-  final String groupName;
-  final int onlineCount;
-  final int acceptedCount;
-  final List<GroupMember> members;
-  final String? currentUserId;
-
-  @override
-  Widget build(BuildContext context) {
-    final center = _centerFor(members);
-    final zoom = members.isEmpty ? 5 : 13;
-
-    return GlassCard(
-      padding: EdgeInsets.zero,
-      child: ClipRRect(
-        borderRadius: BorderRadius.circular(28),
-        child: SizedBox(
-          height: 360,
-          child: Stack(
-            children: [
-              _OpenStreetMapPreview(
-                center: center,
-                zoom: zoom,
-                members: members,
-                currentUserId: currentUserId,
-              ),
-              Positioned(
-                top: 16,
-                left: 16,
-                right: 16,
-                child: DecoratedBox(
-                  decoration: BoxDecoration(
-                    color: Theme.of(context).cardColor.withValues(alpha: 0.92),
-                    borderRadius: BorderRadius.circular(22),
-                    border: Border.all(
-                      color:
-                          Theme.of(context).dividerColor.withValues(alpha: 0.5),
-                    ),
-                  ),
-                  child: Padding(
-                    padding: const EdgeInsets.all(16),
-                    child: Column(
-                      crossAxisAlignment: CrossAxisAlignment.start,
-                      mainAxisSize: MainAxisSize.min,
-                      children: [
-                        Text(
-                          groupName,
-                          style:
-                              Theme.of(context).textTheme.titleLarge?.copyWith(
-                                    fontWeight: FontWeight.w900,
-                                  ),
-                        ),
-                        const SizedBox(height: 4),
-                        Text(
-                          '$onlineCount online • $acceptedCount accepted',
-                          style:
-                              Theme.of(context).textTheme.bodyMedium?.copyWith(
-                                    color: Theme.of(context).hintColor,
-                                  ),
-                        ),
-                        if (members.isEmpty) ...[
-                          const SizedBox(height: 6),
-                          Text(
-                            'No valid live locations yet.',
-                            style: Theme.of(context)
-                                .textTheme
-                                .bodyMedium
-                                ?.copyWith(
-                                  color: Theme.of(context).hintColor,
-                                ),
-                          ),
-                        ],
-                      ],
-                    ),
-                  ),
-                ),
-              ),
-              Positioned(
-                right: 12,
-                bottom: 10,
-                child: DecoratedBox(
-                  decoration: BoxDecoration(
-                    color: Colors.white.withValues(alpha: 0.86),
-                    borderRadius: BorderRadius.circular(10),
-                  ),
-                  child: const Padding(
-                    padding: EdgeInsets.symmetric(horizontal: 8, vertical: 4),
-                    child: Text(
-                      'Copyright OpenStreetMap contributors',
-                      style: TextStyle(fontSize: 10, color: Colors.black87),
-                    ),
-                  ),
-                ),
-              ),
-            ],
-          ),
-        ),
       ),
     );
   }
@@ -769,12 +1151,14 @@ class _OpenStreetMapPreview extends StatelessWidget {
     required this.zoom,
     required this.members,
     required this.currentUserId,
+    required this.highlightedUserId,
   });
 
   final _LatLng center;
   final int zoom;
   final List<GroupMember> members;
   final String? currentUserId;
+  final String? highlightedUserId;
 
   @override
   Widget build(BuildContext context) {
@@ -782,23 +1166,16 @@ class _OpenStreetMapPreview extends StatelessWidget {
       builder: (context, constraints) {
         final width = constraints.maxWidth;
         final height = constraints.maxHeight;
-
         final centerPixel = _project(center.latitude, center.longitude, zoom);
         final centerTileX = (centerPixel.dx / _tileSize).floor();
         final centerTileY = (centerPixel.dy / _tileSize).floor();
-
         final tileRadiusX = (width / _tileSize / 2).ceil() + 1;
         final tileRadiusY = (height / _tileSize / 2).ceil() + 1;
-
         final maxTile = math.pow(2, zoom).toInt();
         final tiles = <Widget>[];
 
-        for (var x = centerTileX - tileRadiusX;
-            x <= centerTileX + tileRadiusX;
-            x++) {
-          for (var y = centerTileY - tileRadiusY;
-              y <= centerTileY + tileRadiusY;
-              y++) {
+        for (var x = centerTileX - tileRadiusX; x <= centerTileX + tileRadiusX; x++) {
+          for (var y = centerTileY - tileRadiusY; y <= centerTileY + tileRadiusY; y++) {
             if (y < 0 || y >= maxTile) {
               continue;
             }
@@ -833,21 +1210,17 @@ class _OpenStreetMapPreview extends StatelessWidget {
               ...tiles,
               ...members.map((member) {
                 final location = member.location!;
-                final point = _project(
-                  location.latitude,
-                  location.longitude,
-                  zoom,
-                );
-
+                final point = _project(location.latitude, location.longitude, zoom);
                 final left = width / 2 + point.dx - centerPixel.dx;
                 final top = height / 2 + point.dy - centerPixel.dy;
 
                 return Positioned(
                   left: left - 24,
-                  top: top - 48,
+                  top: top - 56,
                   child: _MapMarker(
                     member: member,
                     isCurrentUser: member.userId == currentUserId,
+                    isHighlighted: _memberKey(member) == highlightedUserId,
                   ),
                 );
               }),
@@ -863,57 +1236,58 @@ class _MapMarker extends StatelessWidget {
   const _MapMarker({
     required this.member,
     required this.isCurrentUser,
+    required this.isHighlighted,
   });
 
   final GroupMember member;
   final bool isCurrentUser;
+  final bool isHighlighted;
 
   @override
   Widget build(BuildContext context) {
-    final color =
-        _parseColor(member.user?.avatarColor) ?? Theme.of(context).colorScheme.primary;
+    final color = _parseColor(member.user?.avatarColor) ?? Theme.of(context).colorScheme.primary;
+    final markerColor = isCurrentUser ? const Color(0xFF2D6BFF) : color;
 
     return Column(
       mainAxisSize: MainAxisSize.min,
       children: [
-        DecoratedBox(
+        AnimatedContainer(
+          duration: const Duration(milliseconds: 200),
           decoration: BoxDecoration(
-            color: color,
-            borderRadius: BorderRadius.circular(22),
+            color: markerColor,
+            borderRadius: BorderRadius.circular(24),
             border: Border.all(
-              color: isCurrentUser ? Colors.white : Theme.of(context).cardColor,
-              width: isCurrentUser ? 3 : 1.5,
+              color: Colors.white,
+              width: isHighlighted ? 3 : 2,
             ),
-            boxShadow: const [
+            boxShadow: [
               BoxShadow(
-                color: Color(0x55000000),
-                blurRadius: 10,
-                offset: Offset(0, 4),
+                color: markerColor.withValues(alpha: isHighlighted ? 0.45 : 0.28),
+                blurRadius: isHighlighted ? 20 : 12,
+                offset: const Offset(0, 6),
               ),
             ],
           ),
           child: Padding(
-            padding: const EdgeInsets.symmetric(horizontal: 11, vertical: 10),
+            padding: EdgeInsets.symmetric(
+              horizontal: isHighlighted ? 12 : 11,
+              vertical: isHighlighted ? 11 : 10,
+            ),
             child: isCurrentUser
                 ? const Icon(
-                    Icons.person_pin_circle_rounded,
+                    Icons.navigation_rounded,
                     color: Colors.white,
                     size: 20,
                   )
                 : Text(
-                    initialsFromName(
-                      member.user?.name ?? member.location?.username ?? 'TC',
-                    ),
-                    style: const TextStyle(
-                      color: Colors.white,
-                      fontWeight: FontWeight.w900,
-                    ),
+                    initialsFromName(member.user?.name ?? member.location?.username ?? 'TC'),
+                    style: const TextStyle(color: Colors.white, fontWeight: FontWeight.w900),
                   ),
           ),
         ),
         CustomPaint(
           size: const Size(14, 8),
-          painter: _MarkerPointerPainter(color),
+          painter: _MarkerPointerPainter(markerColor),
         ),
       ],
     );
@@ -949,7 +1323,77 @@ class _LatLng {
   final double longitude;
 }
 
-_LatLng _centerFor(List<GroupMember> members) {
+List<GroupMember> _acceptedMembers(List<GroupMember> members) {
+  return members.where((member) => member.status == 'accepted').toList(growable: false);
+}
+
+List<GroupMember> _locatedMembers(List<GroupMember> members) {
+  return members.where((member) => _isValidLocation(member.location)).toList(growable: false);
+}
+
+String? _resolveHighlightedMemberId(
+  List<GroupMember> locatedMembers, {
+  required String? currentUserId,
+  required String? previousId,
+}) {
+  if (previousId != null && locatedMembers.any((member) => _memberKey(member) == previousId)) {
+    return previousId;
+  }
+
+  final currentUserMember = _findMemberByUserId(locatedMembers, currentUserId);
+  if (currentUserMember != null) {
+    return _memberKey(currentUserMember);
+  }
+
+  return locatedMembers.isNotEmpty ? _memberKey(locatedMembers.first) : null;
+}
+
+GroupMember? _findMemberByUserId(List<GroupMember> members, String? userId) {
+  if (userId == null) {
+    return null;
+  }
+
+  for (final member in members) {
+    if (member.userId == userId) {
+      return member;
+    }
+  }
+
+  return null;
+}
+
+GroupMember? _findMemberByKey(List<GroupMember> members, String? key) {
+  if (key == null) {
+    return null;
+  }
+
+  for (final member in members) {
+    if (_memberKey(member) == key) {
+      return member;
+    }
+  }
+
+  return null;
+}
+
+String? _memberKey(GroupMember? member) {
+  if (member == null) {
+    return null;
+  }
+
+  return member.userId ?? member.phoneNumber;
+}
+
+_LatLng _centerFor(List<GroupMember> members, {String? highlightedUserId}) {
+  final highlightedMember = _findMemberByKey(members, highlightedUserId);
+
+  if (highlightedMember?.location != null) {
+    return _LatLng(
+      highlightedMember!.location!.latitude,
+      highlightedMember.location!.longitude,
+    );
+  }
+
   if (members.isEmpty) {
     return const _LatLng(_defaultLatitude, _defaultLongitude);
   }
@@ -964,14 +1408,10 @@ _LatLng _centerFor(List<GroupMember> members) {
 }
 
 Offset _project(double latitude, double longitude, int zoom) {
-  final sinLatitude =
-      math.sin(latitude * math.pi / 180).clamp(-0.9999, 0.9999).toDouble();
+  final sinLatitude = math.sin(latitude * math.pi / 180).clamp(-0.9999, 0.9999).toDouble();
   final scale = (_tileSize * math.pow(2, zoom)).toDouble();
-
   final x = (longitude + 180) / 360 * scale;
-  final y =
-      (0.5 - math.log((1 + sinLatitude) / (1 - sinLatitude)) / (4 * math.pi)) *
-          scale;
+  final y = (0.5 - math.log((1 + sinLatitude) / (1 - sinLatitude)) / (4 * math.pi)) * scale;
 
   return Offset(x, y);
 }
@@ -1010,8 +1450,7 @@ bool _isValidCoordinate(double? latitude, double? longitude) {
 }
 
 bool _isValidLocation(LocationSnapshot? location) {
-  return location != null &&
-      _isValidCoordinate(location.latitude, location.longitude);
+  return location != null && _isValidCoordinate(location.latitude, location.longitude);
 }
 
 Color? _parseColor(String? value) {
