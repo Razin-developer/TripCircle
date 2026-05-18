@@ -632,8 +632,9 @@ class _MapBottomSheet extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final theme = Theme.of(context);
+    final resolvedMember = member;
 
-    if (member == null || member.location == null) {
+    if (resolvedMember == null || resolvedMember.location == null) {
       return DecoratedBox(
         decoration: BoxDecoration(
           color: theme.colorScheme.surface.withValues(alpha: 0.94),
@@ -668,7 +669,7 @@ class _MapBottomSheet extends StatelessWidget {
       );
     }
 
-    final location = member.location!;
+    final location = resolvedMember.location!;
     final place = location.nearbyPlaceName.isNotEmpty ? location.nearbyPlaceName : 'Unknown area';
 
     return DecoratedBox(
@@ -692,9 +693,9 @@ class _MapBottomSheet extends StatelessWidget {
             Row(
               children: [
                 CircleAvatar(
-                  backgroundColor: _parseColor(member.user?.avatarColor) ?? theme.colorScheme.primary,
+                  backgroundColor: _parseColor(resolvedMember.user?.avatarColor) ?? theme.colorScheme.primary,
                   child: Text(
-                    initialsFromName(member.user?.name ?? location.username),
+                    initialsFromName(resolvedMember.user?.name ?? location.username),
                     style: const TextStyle(color: Colors.white, fontWeight: FontWeight.w900),
                   ),
                 ),
@@ -704,18 +705,18 @@ class _MapBottomSheet extends StatelessWidget {
                     crossAxisAlignment: CrossAxisAlignment.start,
                     children: [
                       Text(
-                        member.user?.name ?? member.phoneNumber,
+                        resolvedMember.user?.name ?? resolvedMember.phoneNumber,
                         style: theme.textTheme.titleMedium?.copyWith(fontWeight: FontWeight.w900),
                       ),
                       const SizedBox(height: 2),
                       Text(
-                        '@${member.user?.username ?? location.username}',
+                        '@${resolvedMember.user?.username ?? location.username}',
                         style: theme.textTheme.bodyMedium?.copyWith(color: theme.hintColor),
                       ),
                     ],
                   ),
                 ),
-                _OnlinePill(isOnline: member.isOnline),
+                _OnlinePill(isOnline: resolvedMember.isOnline),
               ],
             ),
             const SizedBox(height: 14),
@@ -734,7 +735,7 @@ class _MapBottomSheet extends StatelessWidget {
                 Expanded(
                   child: _MetricTile(
                     label: 'Updated',
-                    value: formatRelativeTime(location.updatedAt.isNotEmpty ? location.updatedAt : member.lastSeenAt),
+                    value: formatRelativeTime(location.updatedAt.isNotEmpty ? location.updatedAt : resolvedMember.lastSeenAt),
                   ),
                 ),
                 const SizedBox(width: 10),
