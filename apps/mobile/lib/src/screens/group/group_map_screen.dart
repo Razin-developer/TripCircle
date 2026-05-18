@@ -147,6 +147,9 @@ class _GroupMapScreenState extends State<GroupMapScreen> {
       return;
     }
 
+    final resolvedLatitude = latitude!;
+    final resolvedLongitude = longitude!;
+
     final detail = groupDetail;
 
     if (detail == null) {
@@ -176,8 +179,8 @@ class _GroupMapScreenState extends State<GroupMapScreen> {
                   data['username']?.toString() ??
                   member.user?.username ??
                   'unknown',
-              latitude: latitude,
-              longitude: longitude,
+              latitude: resolvedLatitude,
+              longitude: resolvedLongitude,
               nearbyPlaceName: data['nearbyPlaceName']?.toString() ?? '',
               state: data['state']?.toString() ?? '',
               country: data['country']?.toString() ?? '',
@@ -746,7 +749,7 @@ class _LiveMapCard extends StatelessWidget {
                   child: const Padding(
                     padding: EdgeInsets.symmetric(horizontal: 8, vertical: 4),
                     child: Text(
-                      '© OpenStreetMap contributors',
+                      'Copyright OpenStreetMap contributors',
                       style: TextStyle(fontSize: 10, color: Colors.black87),
                     ),
                   ),
@@ -961,8 +964,9 @@ _LatLng _centerFor(List<GroupMember> members) {
 }
 
 Offset _project(double latitude, double longitude, int zoom) {
-  final sinLatitude = math.sin(latitude * math.pi / 180).clamp(-0.9999, 0.9999);
-  final scale = _tileSize * math.pow(2, zoom);
+  final sinLatitude =
+      math.sin(latitude * math.pi / 180).clamp(-0.9999, 0.9999).toDouble();
+  final scale = (_tileSize * math.pow(2, zoom)).toDouble();
 
   final x = (longitude + 180) / 360 * scale;
   final y =

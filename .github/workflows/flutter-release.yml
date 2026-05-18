@@ -29,7 +29,7 @@ jobs:
     runs-on: ubuntu-latest
     defaults:
       run:
-        working-directory: apps/flutter
+        working-directory: apps/mobile
     env:
       JAVA_VERSION: '17'
       FLUTTER_VERSION: '3.41.7'
@@ -111,8 +111,8 @@ jobs:
         with:
           name: tripcircle-android-${{ env.RELEASE_TAG }}
           path: |
-            apps/flutter/build/app/outputs/flutter-apk/tripcircle-${{ env.RELEASE_TAG }}.apk
-            apps/flutter/build/app/outputs/bundle/release/tripcircle-${{ env.RELEASE_TAG }}.aab
+            apps/mobile/build/app/outputs/flutter-apk/tripcircle-${{ env.RELEASE_TAG }}.apk
+            apps/mobile/build/app/outputs/bundle/release/tripcircle-${{ env.RELEASE_TAG }}.aab
 
       - name: Publish GitHub release
         uses: softprops/action-gh-release@v2
@@ -122,5 +122,5 @@ jobs:
           prerelease: ${{ env.PRERELEASE == 'true' }}
           generate_release_notes: true
           files: |
-            apps/flutter/build/app/outputs/flutter-apk/tripcircle-${{ env.RELEASE_TAG }}.apk
-            apps/flutter/build/app/outputs/bundle/release/tripcircle-${{ env.RELEASE_TAG }}.aab
+            apps/mobile/build/app/outputs/flutter-apk/tripcircle-${{ env.RELEASE_TAG }}.apk
+            apps/mobile/build/app/outputs/bundle/release/tripcircle-${{ env.RELEASE_TAG }}.aab
